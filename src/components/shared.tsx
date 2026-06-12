@@ -926,6 +926,7 @@ export function FileSidebar({
       const matches: { id: string; file: FileEntry; line?: RpyLine }[] = []
       if (fileMatches) matches.push({ id: `file:${file.path}`, file })
       for (const line of lines) {
+        if (!isFileIndexSearchableLine(line)) continue
         const speakerName = line.characterId
           ? characterById.get(line.characterId)?.displayName
           : undefined
@@ -1127,6 +1128,16 @@ function findImageFile(files: FileEntry[], imagePath: string) {
     const path = normalizePathKey(file.path)
     return path === wanted || path.endsWith(`/${wanted}`)
   })
+}
+
+function isFileIndexSearchableLine(line: RpyLine) {
+  return (
+    line.editable ||
+    line.kind === 'show' ||
+    line.kind === 'scene' ||
+    line.kind === 'label' ||
+    line.kind === 'menu'
+  )
 }
 
 function ImageLightbox({
