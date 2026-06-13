@@ -1348,13 +1348,19 @@ function AppShell({
   const diagnosticCount = snapshot?.index.diagnostics.length ?? 0
   const shouldAnimate = settings.motionEnabled && !prefersReducedMotion
   const previousViewRef = useRef<ViewKey>(view)
+  const [settledView, setSettledView] = useState<ViewKey>(view)
   const viewDirection = Math.sign(
     viewOrder.indexOf(view) - viewOrder.indexOf(previousViewRef.current),
   )
+  const viewSettled = !shouldAnimate || settledView === view
 
   useEffect(() => {
     previousViewRef.current = view
   }, [view])
+
+  useEffect(() => {
+    if (!shouldAnimate) setSettledView(view)
+  }, [shouldAnimate, view])
 
   if (isRestoring) {
     return <AppBootScreen status={status} theme={settings.theme} />
@@ -1393,6 +1399,7 @@ function AppShell({
             key={view}
             enabled={shouldAnimate}
             direction={viewDirection}
+            onSettled={() => setSettledView(view)}
           >
             {view === 'home' && (
               <HomeView
@@ -1536,6 +1543,8 @@ function AppShell({
         open={tourGuideOpen}
         currentStepId={settings.tourGuideCurrentStepId}
         snapshot={snapshot}
+        activeView={view}
+        viewSettled={viewSettled}
         motionEnabled={settings.motionEnabled}
         onOpenChange={setTourGuideOpen}
         onStepChange={setTourGuideStep}
@@ -1550,10 +1559,12 @@ function AppShell({
 function MotionView({
   enabled,
   direction,
+  onSettled,
   children,
 }: {
   enabled: boolean
   direction: number
+  onSettled: () => void
   children: ReactNode
 }) {
   return (
@@ -1577,6 +1588,7 @@ function MotionView({
       transition={
         enabled ? { duration: 0.18, ease: 'easeOut' } : { duration: 0 }
       }
+      onAnimationComplete={onSettled}
     >
       {children}
     </motion.div>

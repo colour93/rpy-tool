@@ -22,6 +22,8 @@ interface TourGuideProps {
   open: boolean
   currentStepId?: TourGuideStepId
   snapshot?: WorkspaceSnapshot
+  activeView: ViewKey
+  viewSettled: boolean
   motionEnabled: boolean
   onOpenChange: (open: boolean) => void
   onStepChange: (stepId: TourGuideStepId) => void
@@ -76,6 +78,8 @@ export function TourGuide({
   open,
   currentStepId,
   snapshot,
+  activeView,
+  viewSettled,
   motionEnabled,
   onOpenChange,
   onStepChange,
@@ -165,13 +169,20 @@ export function TourGuide({
     step?.id,
   ])
 
-  // On step change the target view is still mounting, so poll a few frames
-  // until its anchor is laid out. Crucially we keep the previous spotlight rect
-  // until then (never snapping to a left-edge fallback), so the spotlight
-  // springs straight from the old target to the new one with no detour.
   useEffect(() => {
     if (!open || !step) return
     onNavigate(step.view)
+  }, [onNavigate, open, step])
+
+  // On step change the target view is still mounting and may also be mid-way
+  // through a MotionView transition. Wait for the destination view to settle
+  // before measuring; otherwise getBoundingClientRect() reads animated
+  // transform offsets and the spotlight drifts away from the final DOM bounds.
+  // Crucially we keep the previous spotlight rect until then (never snapping to
+  // a left-edge fallback), so the spotlight springs straight from the old
+  // target to the new one with no detour.
+  useEffect(() => {
+    if (!open || !step || activeView !== step.view || !viewSettled) return
 
     let raf = 0
     let attempts = 0
@@ -194,7 +205,7 @@ export function TourGuide({
       window.removeEventListener('resize', onReflow)
       window.removeEventListener('scroll', onReflow, true)
     }
-  }, [locate, onNavigate, open, step])
+  }, [activeView, locate, open, step, viewSettled])
 
   useEffect(() => {
     const onResize = () => setViewport(readViewport())

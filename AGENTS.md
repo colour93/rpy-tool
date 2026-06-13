@@ -124,6 +124,7 @@ FileSystemDirectoryHandle (IndexedDB)
 - 没有工作区时只展示 `requiresWorkspace` 为假的步骤（项目说明、打开工作区）；打开工作区后才补齐资产、立绘、编辑、关于步骤。
 - 点击关闭只临时收起，不标记完成；点击跳过或完成才写入 `tourGuideCompleted`。
 - Tour anchor 使用 `data-tour="..."`，新增步骤必须优先锚定稳定的小控件 / 小区域（例如 mode switch、slider、按钮组），不要直接锚定整页工作区。
+- Tour Guide 跨视图跳转时必须等待目标 `MotionView` 进入动画完成（`viewSettled`）后再读取 DOM 边界；否则 `getBoundingClientRect()` 会读到 transform 过渡中的位置，导致 spotlight / 卡片偏移。
 - 聚光框只读取目标元素 `getBoundingClientRect()`，不得改变业务布局；定位失败时退回 fallback rect 并用整屏 scrim。
 - 引导卡片定位走 `placeCard()` 算法：先测量卡片自身 `offsetWidth/Height`，按聚光框中心对齐选 下 / 上 / 右 / 左 中第一个放得下的方向；目标过大（如整屏 workbench 面板）放不下时，钉到剩余空间最大的边，不再让卡片悬空或随意压住聚光框。
 - 遮罩只用聚光框的 `box-shadow` 大扩散实现，高亮元素保持明亮；整屏只放一个透明 click-catcher 负责点击空白关闭。
@@ -409,6 +410,7 @@ src/
 ✅ 44. Sonner Toast 主题跟随 `UserSettings.theme`，light / dark 与应用界面保持一致
 ✅ 45. 关于页补充 `rpy-tool` 项目说明，覆盖本地离线、版本管理建议和写后流程定位
 ✅ 46. 主视图 tab 切换动画改为按导航顺序横向滑动，更符合左右切换直觉
+✅ 47. Tour Guide 跨视图步骤等待目标视图 MotionView 动画完成后再测量 anchor DOM 边界，避免动画 transform 期间读到偏移坐标
 
 ## 命令快捷键
 
