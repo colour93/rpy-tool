@@ -14,9 +14,9 @@
 
 - **React 19** + **TypeScript 6** + **Vite 8**
 - **Tailwind CSS 4** (`@tailwindcss/vite` 插件) — 唯一样式来源，**已删除 App.css**
-- **Light/Dark theme** — `UserSettings.theme` 持久化，根节点 `data-theme` + `dark` class 驱动 CSS token
+- **Light/Dark theme** — `UserSettings.theme` 持久化，根节点 `data-theme` + `dark` class 驱动 CSS token，Sonner Toast 同步跟随应用主题
 - **shadcn/ui 风格自建组件** — `Button`, `Badge`, `Input`, `Textarea`, `Separator`, `ScrollArea`
-- **Sonner** — Toast 通知层，`useToast()` 保留业务调用适配
+- **Sonner** — Toast 通知层，`useToast()` 保留业务调用适配，主题由应用 light/dark 设置驱动
 - **Motion** (`motion/react`) — 视图切换、用户旅程引导 overlay / 聚光定位 / 卡片切换过渡
 - **Monaco Editor** (`monaco-editor`) — IDE 类首屏同步加载，本地打包到 `dist`，不走外部 CDN
 - **lucide-react** — 图标
@@ -90,7 +90,7 @@ FileSystemDirectoryHandle (IndexedDB)
   - 所有主视图 sidebar 必须支持鼠标横向拖拽调整宽度，使用 `useResizableSidebar()` + `SidebarResizeHandle`
   - resize handle 的布局列统一使用 `12px` 命中区，中间只显示细分隔线，避免 6px 热区过窄
   - 可 resize 区域只做最小宽度限制，不做最大宽度限制，用户可以按工作区实际空间继续拉宽
-  - 视图切换由 `MotionView` 包裹，只做整页轻量 opacity/y 过渡，不给 `LineList` 虚拟滚动行逐项加动画
+  - 视图切换由 `MotionView` 包裹，按顶栏 tab 顺序做整页轻量横向滑动 + opacity 过渡，不给 `LineList` 虚拟滚动行逐项加动画
   - motion 受 `UserSettings.motionEnabled` 与系统 reduced-motion 偏好共同控制
 
 ## 首页与关于页
@@ -102,7 +102,7 @@ FileSystemDirectoryHandle (IndexedDB)
 
 文案原则：优先短标题、短状态、短按钮；避免解释型 description 堆叠。
 
-关于页（`about-view.tsx`）先保持空壳，用作后续信息与设置入口；当前放主题调整、过渡动画开关和重新打开用户旅程引导。
+关于页（`about-view.tsx`）作为信息与设置入口；当前放主题调整、过渡动画开关、重新打开用户旅程引导，以及一份 `rpy-tool` 项目说明（本地离线、建议先做版本管理、定位为写后校对 / 审阅 / 修改 / 立绘查分）。
 
 ## 用户旅程引导（Tour Guide）
 
@@ -406,6 +406,9 @@ src/
 ✅ 41. 图片预览支持 50%–300% 缩放和透明棋盘背景，资产详情与全屏预览共用控件
 ✅ 42. 引入 `motion`，为主视图切换和用户旅程引导提供轻量过渡动画，并支持 `UserSettings.motionEnabled` 关闭
 ✅ 43. 按产品 / 用户旅程重排 Tour Guide：项目说明 → 打开工作区 → 资产管理 → 立绘快插 → 文本 Review → 可视化编辑器 → 关于；不再介绍首页，无工作区时仅展示项目说明与打开工作区
+✅ 44. Sonner Toast 主题跟随 `UserSettings.theme`，light / dark 与应用界面保持一致
+✅ 45. 关于页补充 `rpy-tool` 项目说明，覆盖本地离线、版本管理建议和写后流程定位
+✅ 46. 主视图 tab 切换动画改为按导航顺序横向滑动，更符合左右切换直觉
 
 ## 命令快捷键
 

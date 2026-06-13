@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -87,6 +88,15 @@ import {
   TourGuide,
 } from '@/components/tour-guide'
 import { tourGuideSteps } from '@/services/tour-guide'
+
+const viewOrder: ViewKey[] = [
+  'home',
+  'visual',
+  'review',
+  'sprite',
+  'assets',
+  'about',
+]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -1337,6 +1347,14 @@ function AppShell({
   const draftCount = Object.keys(drafts).length
   const diagnosticCount = snapshot?.index.diagnostics.length ?? 0
   const shouldAnimate = settings.motionEnabled && !prefersReducedMotion
+  const previousViewRef = useRef<ViewKey>(view)
+  const viewDirection = Math.sign(
+    viewOrder.indexOf(view) - viewOrder.indexOf(previousViewRef.current),
+  )
+
+  useEffect(() => {
+    previousViewRef.current = view
+  }, [view])
 
   if (isRestoring) {
     return <AppBootScreen status={status} theme={settings.theme} />
@@ -1370,8 +1388,12 @@ function AppShell({
       />
 
       <div className="relative flex-1 overflow-hidden">
-        <AnimatePresence mode="wait" initial={false}>
-          <MotionView key={view} enabled={shouldAnimate}>
+        <AnimatePresence mode="wait" initial={false} custom={viewDirection}>
+          <MotionView
+            key={view}
+            enabled={shouldAnimate}
+            direction={viewDirection}
+          >
             {view === 'home' && (
               <HomeView
                 snapshot={snapshot}
@@ -1527,18 +1549,34 @@ function AppShell({
 
 function MotionView({
   enabled,
+  direction,
   children,
 }: {
   enabled: boolean
+  direction: number
   children: ReactNode
 }) {
   return (
     <motion.div
       className="absolute inset-0 overflow-hidden"
-      initial={enabled ? { opacity: 0, y: 8 } : false}
-      animate={{ opacity: 1, y: 0 }}
-      exit={enabled ? { opacity: 0, y: -6 } : undefined}
-      transition={enabled ? { duration: 0.16, ease: 'easeOut' } : { duration: 0 }}
+      custom={direction}
+      variants={{
+        enter: (customDirection: number) => ({
+          opacity: 0,
+          x: customDirection === 0 ? 0 : customDirection > 0 ? 32 : -32,
+        }),
+        center: { opacity: 1, x: 0 },
+        exit: (customDirection: number) => ({
+          opacity: 0,
+          x: customDirection === 0 ? 0 : customDirection > 0 ? -32 : 32,
+        }),
+      }}
+      initial={enabled ? 'enter' : false}
+      animate="center"
+      exit={enabled ? 'exit' : undefined}
+      transition={
+        enabled ? { duration: 0.18, ease: 'easeOut' } : { duration: 0 }
+      }
     >
       {children}
     </motion.div>

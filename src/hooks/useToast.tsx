@@ -1,8 +1,15 @@
-import { createContext, useCallback, useContext, useMemo } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import type { ReactNode } from 'react'
 import { Toaster, toast as sonnerToast } from 'sonner'
 import type { ExternalToast } from 'sonner'
-import type { ToastMessage } from '@/types'
+import type { ThemeMode, ToastMessage } from '@/types'
 
 interface ToastContextValue {
   push: (toast: Omit<ToastMessage, 'id'>) => string
@@ -15,7 +22,26 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined)
 
+function readDocumentTheme(): ThemeMode {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const [theme, setTheme] = useState<ThemeMode>(() => readDocumentTheme())
+
+  useEffect(() => {
+    const root = document.documentElement
+    setTheme(readDocumentTheme())
+    const observer = new MutationObserver(() => {
+      setTheme(readDocumentTheme())
+    })
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'class'],
+    })
+    return () => observer.disconnect()
+  }, [])
+
   const dismiss = useCallback((id: string) => {
     sonnerToast.dismiss(id)
   }, [])
@@ -69,7 +95,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         richColors
         expand={false}
         position="top-center"
-        theme="system"
+        theme={theme}
         visibleToasts={5}
         toastOptions={{
           classNames: {

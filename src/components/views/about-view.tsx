@@ -1,6 +1,32 @@
-import { HelpCircle, Moon, Sparkles, Sun } from 'lucide-react'
+import {
+  FileCheck2,
+  FolderOpen,
+  HelpCircle,
+  Moon,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ThemeMode } from '@/types'
+
+const projectNotes = [
+  {
+    title: '本地离线处理',
+    body: '通过浏览器 File System Access API 读写本机 RenPy 工作区。',
+    icon: FolderOpen,
+  },
+  {
+    title: '建议版本管理',
+    body: '工具会直接写回脚本文件，建议在 Git 或其他版本管理下使用。',
+    icon: ShieldCheck,
+  },
+  {
+    title: '面向写后流程',
+    body: '定位于编写后的校对、审阅、修改和立绘查分。',
+    icon: FileCheck2,
+  },
+]
 
 export function AboutView({
   theme,
@@ -79,6 +105,30 @@ export function AboutView({
                 @colour93/rpy-tool
               </a>
             </p>
+          </div>
+        </section>
+        <section className="rounded-lg border border-border bg-card p-5">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <h1 className="text-xl font-semibold">说明</h1>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {projectNotes.map((note) => {
+              const Icon = note.icon
+              return (
+                <article
+                  key={note.title}
+                  className="rounded-md border border-border bg-background p-4"
+                >
+                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-secondary text-info">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <h3 className="text-sm font-semibold">{note.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {note.body}
+                  </p>
+                </article>
+              )
+            })}
           </div>
         </section>
       </div>
