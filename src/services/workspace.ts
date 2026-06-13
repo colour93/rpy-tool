@@ -17,7 +17,9 @@ const DEFAULT_IGNORES = new Set([
 
 export async function openWorkspace() {
   if (!window.showDirectoryPicker) {
-    throw new Error('当前浏览器不支持 File System Access API，请使用 Chrome 或 Edge。')
+    throw new Error(
+      '当前浏览器不支持 File System Access API，请使用 Chrome 或 Edge。',
+    )
   }
 
   const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
@@ -191,7 +193,9 @@ function parseGitignore(text: string): GitIgnoreRule[] {
         .split('/')
         .map((segment) => {
           if (segment === '**') return '.*'
-          return segment.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')
+          return segment
+            .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+            .replace(/\*/g, '[^/]*')
         })
         .join('/')
 
@@ -229,13 +233,17 @@ function shouldIgnore(path: string, name: string, gitignore: GitIgnoreRule[]) {
 function kindFromName(name: string): FileKind {
   const extension = extensionFromName(name)
   if (extension === 'rpy') return 'rpy'
-  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'].includes(extension)) {
+  if (
+    ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'].includes(extension)
+  ) {
     return 'image'
   }
   if (['ogg', 'mp3', 'wav', 'flac', 'm4a'].includes(extension)) return 'audio'
   if (['webm', 'mp4', 'mov'].includes(extension)) return 'video'
   if (['ttf', 'otf', 'woff', 'woff2'].includes(extension)) return 'font'
-  if (['txt', 'md', 'json', 'yml', 'yaml', 'rpyc', 'rpym'].includes(extension)) {
+  if (
+    ['txt', 'md', 'json', 'yml', 'yaml', 'rpyc', 'rpym'].includes(extension)
+  ) {
     return 'text'
   }
   return extension ? 'binary' : 'unknown'

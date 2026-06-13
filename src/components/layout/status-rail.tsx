@@ -31,9 +31,7 @@ export function StatusRail({
           ? `${selectedLine.filePath}:${selectedLine.lineNumber}`
           : 'no line'}
       </span>
-      <span title="当前选中立绘">
-        {selectedState?.imageTag ?? 'no sprite'}
-      </span>
+      <span title="当前选中立绘">{selectedState?.imageTag ?? 'no sprite'}</span>
       <Badge variant={draftCount > 0 ? 'warning' : 'success'}>
         {draftCount > 0 ? `${draftCount} 草稿` : '无草稿'}
       </Badge>

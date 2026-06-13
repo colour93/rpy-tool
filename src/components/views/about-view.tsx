@@ -1,13 +1,13 @@
-import { Moon, Sun } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import type { ThemeMode } from "@/types";
+import { Moon, Sun } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import type { ThemeMode } from '@/types'
 
 export function AboutView({
   theme,
   setTheme,
 }: {
-  theme: ThemeMode;
-  setTheme: (theme: ThemeMode) => void;
+  theme: ThemeMode
+  setTheme: (theme: ThemeMode) => void
 }) {
   return (
     <main className="h-[calc(100vh-var(--shell-chrome))] overflow-auto scrollbar-thin">
@@ -17,17 +17,17 @@ export function AboutView({
             <h1 className="text-xl font-semibold">关于</h1>
             <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
               <Button
-                variant={theme === "light" ? "secondary" : "ghost"}
+                variant={theme === 'light' ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setTheme("light")}
+                onClick={() => setTheme('light')}
                 title="浅色模式"
               >
                 <Sun className="h-3.5 w-3.5" />
               </Button>
               <Button
-                variant={theme === "dark" ? "secondary" : "ghost"}
+                variant={theme === 'dark' ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setTheme("dark")}
+                onClick={() => setTheme('dark')}
                 title="深色模式"
               >
                 <Moon className="h-3.5 w-3.5" />
@@ -50,5 +50,5 @@ export function AboutView({
         </section>
       </div>
     </main>
-  );
+  )
 }

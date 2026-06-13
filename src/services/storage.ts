@@ -59,4 +59,3 @@ export async function idbDelete(storeName: StoreName, key: IDBValidKey) {
     tx.objectStore(storeName).delete(key)
   })
 }
-

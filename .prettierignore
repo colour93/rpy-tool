@@ -1,0 +1,9 @@
+dist
+dist-ssr
+node_modules
+.wrangler
+.claude
+design
+AGENTS.md
+*.tsbuildinfo
+pnpm-lock.yaml

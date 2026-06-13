@@ -17,7 +17,9 @@ ScrollArea.displayName = 'ScrollArea'
 
 export const Separator = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { orientation?: 'horizontal' | 'vertical' }
+  React.HTMLAttributes<HTMLDivElement> & {
+    orientation?: 'horizontal' | 'vertical'
+  }
 >(({ className, orientation = 'horizontal', ...props }, ref) => (
   <div
     ref={ref}

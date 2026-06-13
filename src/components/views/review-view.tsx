@@ -45,7 +45,13 @@ import type {
   WorkspaceSnapshot,
 } from '@/types'
 
-type ReviewScope = 'all' | 'chapter' | 'dirty' | 'diagnostic' | 'noted' | ReviewStatus
+type ReviewScope =
+  | 'all'
+  | 'chapter'
+  | 'dirty'
+  | 'diagnostic'
+  | 'noted'
+  | ReviewStatus
 
 const statusLabels: Record<ReviewStatus, string> = {
   unreviewed: '未校对',
@@ -54,7 +60,10 @@ const statusLabels: Record<ReviewStatus, string> = {
   ignored: '忽略',
 }
 
-const statusVariants: Record<ReviewStatus, 'muted' | 'success' | 'warning' | 'default'> = {
+const statusVariants: Record<
+  ReviewStatus,
+  'muted' | 'success' | 'warning' | 'default'
+> = {
   unreviewed: 'muted',
   approved: 'success',
   'needs-change': 'warning',
@@ -108,7 +117,10 @@ export function ReviewView({
   onCopy: (value: string, label: string) => void
   drafts: Record<string, DraftEntry>
   reviewMarks: Record<string, ReviewMark>
-  onMarkReview: (line: RpyLine, status: Exclude<ReviewStatus, 'unreviewed'>) => void
+  onMarkReview: (
+    line: RpyLine,
+    status: Exclude<ReviewStatus, 'unreviewed'>,
+  ) => void
   onClearReviewMark: (line: RpyLine) => void
   onUpdateReviewNote: (line: RpyLine, note: string) => void
   onExportReviewMarks: () => void
@@ -134,8 +146,12 @@ export function ReviewView({
   const [speakerFilter, setSpeakerFilter] = useState('all')
   const [chapterId, setChapterId] = useState('all')
   const [query, setQuery] = useState('')
-  const [selectedLineKeys, setSelectedLineKeys] = useState<Set<string>>(() => new Set())
-  const [selectionAnchorKey, setSelectionAnchorKey] = useState<string | undefined>()
+  const [selectedLineKeys, setSelectedLineKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [selectionAnchorKey, setSelectionAnchorKey] = useState<
+    string | undefined
+  >()
 
   const chapters = snapshot?.index.chapters ?? emptyChapters
   const diagnostics = snapshot?.index.diagnostics ?? emptyDiagnostics
@@ -150,8 +166,12 @@ export function ReviewView({
   }, [diagnostics])
   const reviewableLines = useMemo(
     () =>
-      (snapshot?.index.lines ?? []).filter((line) =>
-        line.editable && (line.kind === 'dialogue' || line.kind === 'narration' || line.kind === 'choice'),
+      (snapshot?.index.lines ?? []).filter(
+        (line) =>
+          line.editable &&
+          (line.kind === 'dialogue' ||
+            line.kind === 'narration' ||
+            line.kind === 'choice'),
       ),
     [snapshot],
   )
@@ -160,16 +180,23 @@ export function ReviewView({
       ? chapterForLine(snapshot.index.chapters, selectedLine)
       : chapters[0]
   const selectedLineStatus = selectedLine
-    ? reviewMarks[lineKey(selectedLine)]?.status ?? 'unreviewed'
+    ? (reviewMarks[lineKey(selectedLine)]?.status ?? 'unreviewed')
     : 'unreviewed'
 
   const speakers = useMemo(
-    () => uniqueValues(reviewableLines.map((line) => line.characterId ?? '旁白')),
+    () =>
+      uniqueValues(reviewableLines.map((line) => line.characterId ?? '旁白')),
     [reviewableLines],
   )
   const normalizedQuery = query.trim().toLowerCase()
   const characterById = useMemo(
-    () => new Map((snapshot?.index.characters ?? []).map((character) => [character.id, character])),
+    () =>
+      new Map(
+        (snapshot?.index.characters ?? []).map((character) => [
+          character.id,
+          character,
+        ]),
+      ),
     [snapshot?.index.characters],
   )
   const filteredLines = useMemo(
@@ -241,11 +268,15 @@ export function ReviewView({
     return next
   }, [filteredLineKeys, selectedLineKeys])
   const selectedReviewLines = useMemo(
-    () => filteredLines.filter((line) => visibleSelectedLineKeys.has(lineKey(line))),
+    () =>
+      filteredLines.filter((line) =>
+        visibleSelectedLineKeys.has(lineKey(line)),
+      ),
     [filteredLines, visibleSelectedLineKeys],
   )
   const isAllFilteredSelected =
-    filteredLines.length > 0 && visibleSelectedLineKeys.size === filteredLines.length
+    filteredLines.length > 0 &&
+    visibleSelectedLineKeys.size === filteredLines.length
   const operationLines = useMemo(() => {
     if (selectedReviewLines.length > 0) return selectedReviewLines
     if (selectedLine && activeLineKey && filteredLineKeys.has(activeLineKey)) {
@@ -259,22 +290,39 @@ export function ReviewView({
     [reviewableLines],
   )
   const activeReviewMarks = useMemo(
-    () => Object.values(reviewMarks).filter((mark) => reviewableLineKeys.has(mark.lineKey)),
+    () =>
+      Object.values(reviewMarks).filter((mark) =>
+        reviewableLineKeys.has(mark.lineKey),
+      ),
     [reviewMarks, reviewableLineKeys],
   )
-  const approvedCount = activeReviewMarks.filter((mark) => mark.status === 'approved').length
-  const needsChangeCount = activeReviewMarks.filter((mark) => mark.status === 'needs-change').length
-  const ignoredCount = activeReviewMarks.filter((mark) => mark.status === 'ignored').length
-  const unreviewedCount = Math.max(0, reviewableLines.length - approvedCount - needsChangeCount - ignoredCount)
+  const approvedCount = activeReviewMarks.filter(
+    (mark) => mark.status === 'approved',
+  ).length
+  const needsChangeCount = activeReviewMarks.filter(
+    (mark) => mark.status === 'needs-change',
+  ).length
+  const ignoredCount = activeReviewMarks.filter(
+    (mark) => mark.status === 'ignored',
+  ).length
+  const unreviewedCount = Math.max(
+    0,
+    reviewableLines.length - approvedCount - needsChangeCount - ignoredCount,
+  )
   const noteCount = activeReviewMarks.filter((mark) => mark.note?.trim()).length
-  const OperationPanelIcon = showLineOperationPanel ? PanelBottomClose : PanelBottomOpen
+  const OperationPanelIcon = showLineOperationPanel
+    ? PanelBottomClose
+    : PanelBottomOpen
 
-  const selectSingleLine = useCallback((line: RpyLine) => {
-    const key = lineKey(line)
-    onSelectLine(line)
-    setSelectedLineKeys(new Set([key]))
-    setSelectionAnchorKey(key)
-  }, [onSelectLine])
+  const selectSingleLine = useCallback(
+    (line: RpyLine) => {
+      const key = lineKey(line)
+      onSelectLine(line)
+      setSelectedLineKeys(new Set([key]))
+      setSelectionAnchorKey(key)
+    },
+    [onSelectLine],
+  )
 
   useEffect(() => {
     if (
@@ -290,14 +338,20 @@ export function ReviewView({
       for (const key of current) {
         if (filteredLineKeys.has(key)) next.add(key)
       }
-      if (next.size === 0 && activeLineKey && filteredLineKeys.has(activeLineKey)) {
+      if (
+        next.size === 0 &&
+        activeLineKey &&
+        filteredLineKeys.has(activeLineKey)
+      ) {
         next.add(activeLineKey)
       }
       return setsEqual(current, next) ? current : next
     })
     setSelectionAnchorKey((current) => {
       if (current && filteredLineKeys.has(current)) return current
-      return activeLineKey && filteredLineKeys.has(activeLineKey) ? activeLineKey : undefined
+      return activeLineKey && filteredLineKeys.has(activeLineKey)
+        ? activeLineKey
+        : undefined
     })
   }, [activeLineKey, filteredLineKeys, filteredLines, selectSingleLine])
 
@@ -317,12 +371,16 @@ export function ReviewView({
       ? searchMatches.findIndex((line) => lineKey(line) === activeLineKey)
       : -1
     if (activeSearchIndex >= 0) {
-      const nextIndex = (activeSearchIndex + delta + searchMatches.length) % searchMatches.length
+      const nextIndex =
+        (activeSearchIndex + delta + searchMatches.length) %
+        searchMatches.length
       selectSingleLine(searchMatches[nextIndex])
       return
     }
     if (currentIndex < 0) {
-      selectSingleLine(delta > 0 ? searchMatches[0] : searchMatches[searchMatches.length - 1])
+      selectSingleLine(
+        delta > 0 ? searchMatches[0] : searchMatches[searchMatches.length - 1],
+      )
       return
     }
     const indexedMatches = searchMatches.map((line) => ({
@@ -332,9 +390,11 @@ export function ReviewView({
     const previousMatch = [...indexedMatches]
       .reverse()
       .find((match) => match.index >= 0 && match.index < currentIndex)
-    const nextMatch = delta > 0
-      ? indexedMatches.find((match) => match.index > currentIndex) ?? indexedMatches[0]
-      : previousMatch ?? indexedMatches[indexedMatches.length - 1]
+    const nextMatch =
+      delta > 0
+        ? (indexedMatches.find((match) => match.index > currentIndex) ??
+          indexedMatches[0])
+        : (previousMatch ?? indexedMatches[indexedMatches.length - 1])
     selectSingleLine(nextMatch.line)
   }
 
@@ -361,7 +421,9 @@ export function ReviewView({
   function advanceAfterLines(targets: RpyLine[]) {
     if (filteredLines.length === 0) return
     const targetIndexes = targets
-      .map((line) => filteredLines.findIndex((item) => lineKey(item) === lineKey(line)))
+      .map((line) =>
+        filteredLines.findIndex((item) => lineKey(item) === lineKey(line)),
+      )
       .filter((index) => index >= 0)
     if (targetIndexes.length === 0) {
       selectSingleLine(filteredLines[0])
@@ -369,25 +431,34 @@ export function ReviewView({
     }
     const lastIndex = Math.max(...targetIndexes)
     const firstIndex = Math.min(...targetIndexes)
-    const nextLine = filteredLines[lastIndex + 1] ?? filteredLines[firstIndex - 1]
+    const nextLine =
+      filteredLines[lastIndex + 1] ?? filteredLines[firstIndex - 1]
     if (nextLine) selectSingleLine(nextLine)
   }
 
-  function handleSelectReviewLine(line: RpyLine, event?: ReactMouseEvent<HTMLButtonElement>) {
+  function handleSelectReviewLine(
+    line: RpyLine,
+    event?: ReactMouseEvent<HTMLButtonElement>,
+  ) {
     const key = lineKey(line)
     onSelectLine(line)
 
     if (event?.shiftKey) {
       const anchorIndex = selectionAnchorKey
-        ? filteredLines.findIndex((item) => lineKey(item) === selectionAnchorKey)
+        ? filteredLines.findIndex(
+            (item) => lineKey(item) === selectionAnchorKey,
+          )
         : -1
-      const targetIndex = filteredLines.findIndex((item) => lineKey(item) === key)
+      const targetIndex = filteredLines.findIndex(
+        (item) => lineKey(item) === key,
+      )
       if (anchorIndex >= 0 && targetIndex >= 0) {
         const start = Math.min(anchorIndex, targetIndex)
         const end = Math.max(anchorIndex, targetIndex)
-        const next = event.ctrlKey || event.metaKey
-          ? new Set(selectedLineKeys)
-          : new Set<string>()
+        const next =
+          event.ctrlKey || event.metaKey
+            ? new Set(selectedLineKeys)
+            : new Set<string>()
         for (let index = start; index <= end; index += 1) {
           next.add(lineKey(filteredLines[index]))
         }
@@ -431,10 +502,26 @@ export function ReviewView({
     [
       { combo: 'j', handler: handleNext, disabled: filteredLines.length === 0 },
       { combo: 'k', handler: handlePrev, disabled: filteredLines.length === 0 },
-      { combo: '1', handler: () => handleMarkAndAdvance('approved'), disabled: operationLines.length === 0 },
-      { combo: '2', handler: () => handleMarkAndAdvance('needs-change'), disabled: operationLines.length === 0 },
-      { combo: '3', handler: () => handleMarkAndAdvance('ignored'), disabled: operationLines.length === 0 },
-      { combo: '0', handler: handleClearAndAdvance, disabled: operationLines.length === 0 },
+      {
+        combo: '1',
+        handler: () => handleMarkAndAdvance('approved'),
+        disabled: operationLines.length === 0,
+      },
+      {
+        combo: '2',
+        handler: () => handleMarkAndAdvance('needs-change'),
+        disabled: operationLines.length === 0,
+      },
+      {
+        combo: '3',
+        handler: () => handleMarkAndAdvance('ignored'),
+        disabled: operationLines.length === 0,
+      },
+      {
+        combo: '0',
+        handler: handleClearAndAdvance,
+        disabled: operationLines.length === 0,
+      },
       { combo: 'mod+a', handler: handleSelectAllFilteredLines },
       {
         combo: 'Escape',
@@ -442,7 +529,15 @@ export function ReviewView({
         disabled: visibleSelectedLineKeys.size <= 1 && Boolean(activeLineKey),
       },
     ],
-    [activeLineKey, currentIndex, filteredLineKeys, filteredLines, operationLines, selectedLine, visibleSelectedLineKeys],
+    [
+      activeLineKey,
+      currentIndex,
+      filteredLineKeys,
+      filteredLines,
+      operationLines,
+      selectedLine,
+      visibleSelectedLineKeys,
+    ],
   )
 
   return (
@@ -556,7 +651,9 @@ export function ReviewView({
             variant="outline"
             size="sm"
             onClick={handleNext}
-            disabled={currentIndex < 0 || currentIndex >= filteredLines.length - 1}
+            disabled={
+              currentIndex < 0 || currentIndex >= filteredLines.length - 1
+            }
             title="下一条校对行 (J)"
           >
             <ChevronDown className="h-3.5 w-3.5" />
@@ -568,8 +665,7 @@ export function ReviewView({
             onClick={onSaveAllDrafts}
             disabled={totalDrafts === 0 || isBusy}
           >
-            提交全部 ({totalDrafts})
-            <KeyboardHint>Ctrl+Shift+S</KeyboardHint>
+            提交全部 ({totalDrafts})<KeyboardHint>Ctrl+Shift+S</KeyboardHint>
           </Button>
         </Toolbar>
         <ScriptLineWorkbench
@@ -617,10 +713,14 @@ export function ReviewView({
         status={selectedLineStatus}
         mark={selectedLine ? reviewMarks[lineKey(selectedLine)] : undefined}
         operationCount={operationLines.length}
-        diagnostics={selectedLine ? diagnosticsForLine(diagnostics, selectedLine) : []}
+        diagnostics={
+          selectedLine ? diagnosticsForLine(diagnostics, selectedLine) : []
+        }
         onMark={handleMarkAndAdvance}
         onClear={handleClearAndAdvance}
-        onChangeNote={(note) => selectedLine && onUpdateReviewNote(selectedLine, note)}
+        onChangeNote={(note) =>
+          selectedLine && onUpdateReviewNote(selectedLine, note)
+        }
         onJumpToLine={onJumpToLine}
       />
     </main>
@@ -674,15 +774,60 @@ function ReviewQueueSidebar({
   searchMatchPosition: number
   onNavigateSearch: (delta: 1 | -1) => void
 }) {
-  const items: { key: ReviewScope; label: string; count: number; icon: React.ReactNode }[] = [
-    { key: 'all', label: '全部校对行', count: totalLines, icon: <PencilLine className="h-3.5 w-3.5" /> },
-    { key: 'unreviewed', label: '未校对', count: unreviewedCount, icon: <Circle className="h-3.5 w-3.5" /> },
-    { key: 'needs-change', label: '需修改', count: needsChangeCount, icon: <MessageSquareWarning className="h-3.5 w-3.5" /> },
-    { key: 'approved', label: '已通过', count: approvedCount, icon: <Check className="h-3.5 w-3.5" /> },
-    { key: 'dirty', label: '有草稿', count: totalDrafts, icon: <PencilLine className="h-3.5 w-3.5" /> },
-    { key: 'noted', label: '有备注', count: noteCount, icon: <MessageSquareWarning className="h-3.5 w-3.5" /> },
-    { key: 'diagnostic', label: '有诊断', count: diagnosticCount, icon: <MessageSquareWarning className="h-3.5 w-3.5" /> },
-    { key: 'ignored', label: '已忽略', count: ignoredCount, icon: <EyeOff className="h-3.5 w-3.5" /> },
+  const items: {
+    key: ReviewScope
+    label: string
+    count: number
+    icon: React.ReactNode
+  }[] = [
+    {
+      key: 'all',
+      label: '全部校对行',
+      count: totalLines,
+      icon: <PencilLine className="h-3.5 w-3.5" />,
+    },
+    {
+      key: 'unreviewed',
+      label: '未校对',
+      count: unreviewedCount,
+      icon: <Circle className="h-3.5 w-3.5" />,
+    },
+    {
+      key: 'needs-change',
+      label: '需修改',
+      count: needsChangeCount,
+      icon: <MessageSquareWarning className="h-3.5 w-3.5" />,
+    },
+    {
+      key: 'approved',
+      label: '已通过',
+      count: approvedCount,
+      icon: <Check className="h-3.5 w-3.5" />,
+    },
+    {
+      key: 'dirty',
+      label: '有草稿',
+      count: totalDrafts,
+      icon: <PencilLine className="h-3.5 w-3.5" />,
+    },
+    {
+      key: 'noted',
+      label: '有备注',
+      count: noteCount,
+      icon: <MessageSquareWarning className="h-3.5 w-3.5" />,
+    },
+    {
+      key: 'diagnostic',
+      label: '有诊断',
+      count: diagnosticCount,
+      icon: <MessageSquareWarning className="h-3.5 w-3.5" />,
+    },
+    {
+      key: 'ignored',
+      label: '已忽略',
+      count: ignoredCount,
+      icon: <EyeOff className="h-3.5 w-3.5" />,
+    },
   ]
   const hasSearchQuery = query.trim().length > 0
 
@@ -720,7 +865,8 @@ function ReviewQueueSidebar({
         </div>
         <p className="text-[11px] text-muted-foreground">
           {filteredLines}/{totalLines} 行 · {totalDrafts} 行有草稿
-          {hasSearchQuery && ` · ${searchMatchPosition > 0 ? `${searchMatchPosition}/` : ''}${searchMatchCount} 命中`}
+          {hasSearchQuery &&
+            ` · ${searchMatchPosition > 0 ? `${searchMatchPosition}/` : ''}${searchMatchCount} 命中`}
         </p>
       </div>
       <div className="space-y-3 overflow-auto scrollbar-thin p-3">
@@ -737,7 +883,9 @@ function ReviewQueueSidebar({
             >
               {item.icon}
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              <span className="font-mono text-[11px] text-muted-foreground">{item.count}</span>
+              <span className="font-mono text-[11px] text-muted-foreground">
+                {item.count}
+              </span>
             </button>
           ))}
         </div>
@@ -792,9 +940,15 @@ function LineReviewBadges({
 }) {
   return (
     <>
-      {hasDiagnostic && <span className="h-2 w-2 rounded-full bg-destructive" title="有诊断" />}
-      {hasDraft && <span className="h-2 w-2 rounded-full bg-warning" title="有草稿" />}
-      {hasNote && <span className="h-2 w-2 rounded-full bg-info" title="有备注" />}
+      {hasDiagnostic && (
+        <span className="h-2 w-2 rounded-full bg-destructive" title="有诊断" />
+      )}
+      {hasDraft && (
+        <span className="h-2 w-2 rounded-full bg-warning" title="有草稿" />
+      )}
+      {hasNote && (
+        <span className="h-2 w-2 rounded-full bg-info" title="有备注" />
+      )}
       {status !== 'unreviewed' && (
         <span
           className={cn(
@@ -844,7 +998,9 @@ function ReviewInspector({
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">状态</span>
-            <Badge variant={statusVariants[status]}>{statusLabels[status]}</Badge>
+            <Badge variant={statusVariants[status]}>
+              {statusLabels[status]}
+            </Badge>
           </div>
           {operationCount > 1 && (
             <p className="text-[11px] text-muted-foreground">
@@ -914,7 +1070,11 @@ function ReviewInspector({
         </section>
 
         <section className="space-y-1 border-t border-border pt-3">
-          <DetailRow label="章节" value={chapter?.title ?? '-'} monospace={false} />
+          <DetailRow
+            label="章节"
+            value={chapter?.title ?? '-'}
+            monospace={false}
+          />
           <DetailRow label="文件" value={line?.filePath ?? '-'} />
           <DetailRow label="行号" value={String(line?.lineNumber ?? '-')} />
           <LineJumpButton
@@ -928,7 +1088,9 @@ function ReviewInspector({
           <DetailRow label="角色" value={line?.characterId ?? '旁白'} />
           <DetailRow
             label="编辑"
-            value={line?.editable ? (dirty ? '有未保存修改' : '已同步') : '只读'}
+            value={
+              line?.editable ? (dirty ? '有未保存修改' : '已同步') : '只读'
+            }
           />
         </section>
 
@@ -955,7 +1117,9 @@ function ReviewInspector({
                 </div>
                 <p>{diagnostic.message}</p>
                 {diagnostic.hint && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">{diagnostic.hint}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {diagnostic.hint}
+                  </p>
                 )}
               </div>
             ))}

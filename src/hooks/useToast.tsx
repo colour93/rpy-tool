@@ -39,7 +39,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
     if (toast.level === 'success') sonnerToast.success(toast.title, options)
     else if (toast.level === 'error') sonnerToast.error(toast.title, options)
-    else if (toast.level === 'warning') sonnerToast.warning(toast.title, options)
+    else if (toast.level === 'warning')
+      sonnerToast.warning(toast.title, options)
     else sonnerToast.info(toast.title, options)
 
     return id

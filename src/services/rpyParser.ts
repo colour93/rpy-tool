@@ -191,7 +191,10 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
     raw,
     editable: false,
     indent,
-  } satisfies Pick<RpyLine, 'filePath' | 'lineNumber' | 'raw' | 'editable' | 'indent'>
+  } satisfies Pick<
+    RpyLine,
+    'filePath' | 'lineNumber' | 'raw' | 'editable' | 'indent'
+  >
 
   if (!trimmed) return { ...base, kind: 'blank' } satisfies RpyLine
   if (trimmed.startsWith('#')) {
@@ -282,7 +285,11 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
 
   const voice = trimmed.match(/^voice\s+(.+)/)
   if (voice) {
-    return { ...base, kind: 'voice', text: unquotePath(voice[1]) } satisfies RpyLine
+    return {
+      ...base,
+      kind: 'voice',
+      text: unquotePath(voice[1]),
+    } satisfies RpyLine
   }
 
   if (/^(init|python|\$)/.test(trimmed)) {
@@ -320,7 +327,9 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
 }
 
 export function replaceEditableLine(raw: string, text: string) {
-  const dialogue = raw.match(/^(\s*[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*\s+)(['"])(.*)(\2)(\s+with\s+\w+)?(\s*)$/)
+  const dialogue = raw.match(
+    /^(\s*[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*\s+)(['"])(.*)(\2)(\s+with\s+\w+)?(\s*)$/,
+  )
   if (dialogue) {
     return `${dialogue[1]}${dialogue[2]}${escapeRenpyText(text, dialogue[2])}${dialogue[4]}${dialogue[5] ?? ''}${dialogue[6] ?? ''}`
   }
@@ -339,16 +348,30 @@ export function replaceEditableLine(raw: string, text: string) {
 }
 
 export function replaceLineSpeaker(raw: string, characterId: string | null) {
-  const dialogue = raw.match(/^(\s*)([A-Za-z_]\w*)((?:\s+[A-Za-z_]\w*)*)\s+(['"])(.*)(\4)(\s+with\s+\w+)?(\s*)$/)
+  const dialogue = raw.match(
+    /^(\s*)([A-Za-z_]\w*)((?:\s+[A-Za-z_]\w*)*)\s+(['"])(.*)(\4)(\s+with\s+\w+)?(\s*)$/,
+  )
   if (dialogue) {
-    const [, indent, , attributes = '', quote, text, closingQuote, modifier = '', trailing = ''] = dialogue
-    if (!characterId) return `${indent}${quote}${text}${closingQuote}${modifier}${trailing}`
+    const [
+      ,
+      indent,
+      ,
+      attributes = '',
+      quote,
+      text,
+      closingQuote,
+      modifier = '',
+      trailing = '',
+    ] = dialogue
+    if (!characterId)
+      return `${indent}${quote}${text}${closingQuote}${modifier}${trailing}`
     return `${indent}${characterId}${attributes} ${quote}${text}${closingQuote}${modifier}${trailing}`
   }
 
   const narration = raw.match(/^(\s*)(['"])(.*)(\2)(\s+with\s+\w+)?(\s*)$/)
   if (narration) {
-    const [, indent, quote, text, closingQuote, modifier = '', trailing = ''] = narration
+    const [, indent, quote, text, closingQuote, modifier = '', trailing = ''] =
+      narration
     if (!characterId) return raw
     return `${indent}${characterId} ${quote}${text}${closingQuote}${modifier}${trailing}`
   }
@@ -357,9 +380,20 @@ export function replaceLineSpeaker(raw: string, characterId: string | null) {
 }
 
 export function replaceDialogueSprite(raw: string, state: CharacterState) {
-  const dialogue = raw.match(/^(\s*)([A-Za-z_]\w*)(?:\s+[A-Za-z_]\w*)*\s+(['"])(.*)(\3)(\s+with\s+\w+)?(\s*)$/)
+  const dialogue = raw.match(
+    /^(\s*)([A-Za-z_]\w*)(?:\s+[A-Za-z_]\w*)*\s+(['"])(.*)(\3)(\s+with\s+\w+)?(\s*)$/,
+  )
   if (!dialogue) return raw
-  const [, indent, characterId, quote, text, closingQuote, modifier = '', trailing = ''] = dialogue
+  const [
+    ,
+    indent,
+    characterId,
+    quote,
+    text,
+    closingQuote,
+    modifier = '',
+    trailing = '',
+  ] = dialogue
   const attributes = dialogueAttributesFromState(state)
   const head = [characterId, attributes].filter(Boolean).join(' ')
   return `${indent}${head} ${quote}${text}${closingQuote}${modifier}${trailing}`
@@ -375,7 +409,13 @@ export function buildShowCommand(options: {
   indent?: string
   variant?: 'show' | 'scene'
 }) {
-  const { imageTag, position, transition, indent = '    ', variant = 'show' } = options
+  const {
+    imageTag,
+    position,
+    transition,
+    indent = '    ',
+    variant = 'show',
+  } = options
   const parts: string[] = [`${indent}${variant} ${imageTag}`]
   if (position) parts.push(`at ${position}`)
   const command = parts.join(' ')
@@ -418,7 +458,8 @@ function buildAssetDiagnostics(
   const diagnostics: Diagnostic[] = []
 
   for (const [path, line] of referencedAssets) {
-    if (!looksLikePath(path) || indexedPaths.has(normalizePathKey(path))) continue
+    if (!looksLikePath(path) || indexedPaths.has(normalizePathKey(path)))
+      continue
     diagnostics.push({
       id: `missing-asset:${line.filePath}:${line.lineNumber}`,
       severity: 'warning',
@@ -487,7 +528,9 @@ function imageLineToState(
 }
 
 function parseCharacterDefine(trimmed: string) {
-  const match = trimmed.match(/^define\s+([A-Za-z_]\w*)\s*=\s*Character\((.*)\)\s*$/)
+  const match = trimmed.match(
+    /^define\s+([A-Za-z_]\w*)\s*=\s*Character\((.*)\)\s*$/,
+  )
   if (!match) return undefined
   const [, characterId, args] = match
   const displayName = args.match(/^\s*(["'])(.*?)\1/)?.[2] ?? characterId
@@ -519,7 +562,8 @@ function categoryFromPath(path: string): AssetRegistryItem['category'] {
   if (normalized.includes('/character') || normalized.includes('/sprite')) {
     return 'character'
   }
-  if (normalized.includes('/bg/') || normalized.includes('background')) return 'bg'
+  if (normalized.includes('/bg/') || normalized.includes('background'))
+    return 'bg'
   if (normalized.includes('/ui/')) return 'ui'
   if (normalized.includes('/fx/')) return 'fx'
   return normalized.match(/\.(ogg|mp3|wav|flac)$/) ? 'sfx' : 'cg'

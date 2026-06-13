@@ -1,16 +1,8 @@
 import { FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  buildHealthItems,
-  countKind,
-  diagnosticGroup,
-} from '@/appHelpers'
+import { buildHealthItems, countKind, diagnosticGroup } from '@/appHelpers'
 import { cn } from '@/lib/cn'
-import type {
-  Diagnostic,
-  ViewKey,
-  WorkspaceSnapshot,
-} from '@/types'
+import type { Diagnostic, ViewKey, WorkspaceSnapshot } from '@/types'
 
 export function HomeView({
   snapshot,
@@ -44,7 +36,11 @@ export function HomeView({
   const healthItems = buildHealthItems(snapshot)
   const diagnostics = snapshot?.index.diagnostics ?? []
   const grouped = diagnosticGroup(diagnostics)
-  const visibleDiagnostics = [...grouped.errors, ...grouped.warnings, ...grouped.info].slice(0, 16)
+  const visibleDiagnostics = [
+    ...grouped.errors,
+    ...grouped.warnings,
+    ...grouped.info,
+  ].slice(0, 16)
 
   return (
     <main className="h-[calc(100vh-var(--shell-chrome))] overflow-auto scrollbar-thin">
@@ -52,11 +48,16 @@ export function HomeView({
         <section className="rounded-lg border border-border-strong bg-card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase text-muted-foreground">数据统计</p>
+              <p className="text-[11px] font-bold uppercase text-muted-foreground">
+                数据统计
+              </p>
               <h1 className="mt-1 truncate text-2xl font-bold">
                 {snapshot ? snapshot.name : '未打开工作区'}
               </h1>
-              <p className="mt-1 truncate text-xs text-muted-foreground" title={status}>
+              <p
+                className="mt-1 truncate text-xs text-muted-foreground"
+                title={status}
+              >
                 {status}
               </p>
             </div>
@@ -86,8 +87,12 @@ export function HomeView({
                 key={metric.label}
                 className="rounded-md border border-border bg-secondary/50 p-3"
               >
-                <span className="text-xs text-muted-foreground">{metric.label}</span>
-                <strong className="mt-2 block text-2xl leading-none">{metric.value}</strong>
+                <span className="text-xs text-muted-foreground">
+                  {metric.label}
+                </span>
+                <strong className="mt-2 block text-2xl leading-none">
+                  {metric.value}
+                </strong>
               </article>
             ))}
           </div>
@@ -118,7 +123,8 @@ export function HomeView({
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">诊断</h2>
             <p className="text-[11px] text-muted-foreground">
-              {grouped.errors.length} 错误 · {grouped.warnings.length} 警告 · {grouped.info.length} 提示
+              {grouped.errors.length} 错误 · {grouped.warnings.length} 警告 ·{' '}
+              {grouped.info.length} 提示
             </p>
           </div>
           <div className="mt-3 grid gap-2">
@@ -132,8 +138,10 @@ export function HomeView({
                 <span
                   className={cn(
                     'rounded-full px-2 py-1 text-center text-[10px] font-bold uppercase',
-                    diagnostic.severity === 'error' && 'bg-destructive/15 text-destructive',
-                    diagnostic.severity === 'warning' && 'bg-warning/15 text-warning-foreground',
+                    diagnostic.severity === 'error' &&
+                      'bg-destructive/15 text-destructive',
+                    diagnostic.severity === 'warning' &&
+                      'bg-warning/15 text-warning-foreground',
                     diagnostic.severity === 'info' && 'bg-info/15 text-info',
                   )}
                 >
@@ -144,7 +152,9 @@ export function HomeView({
                       : '提示'}
                 </span>
                 <div className="min-w-0">
-                  <strong className="block truncate text-xs">{diagnostic.message}</strong>
+                  <strong className="block truncate text-xs">
+                    {diagnostic.message}
+                  </strong>
                   {diagnostic.hint && (
                     <span className="block truncate text-[11px] text-muted-foreground">
                       {diagnostic.hint}

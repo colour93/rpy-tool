@@ -2,7 +2,8 @@
 @plugin 'tailwindcss-animate';
 
 @theme {
-  --font-sans: 'Avenir Next', 'Aptos', 'Segoe UI', 'Microsoft YaHei UI',
+  --font-sans:
+    'Avenir Next', 'Aptos', 'Segoe UI', 'Microsoft YaHei UI',
     'Noto Sans CJK SC', sans-serif;
   --font-mono: 'Cascadia Mono', 'JetBrains Mono', 'Consolas', monospace;
 

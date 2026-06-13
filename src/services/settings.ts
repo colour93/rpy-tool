@@ -87,7 +87,10 @@ export function saveDrafts(drafts: Record<string, DraftEntry>) {
   }
 }
 
-export function clearDraft(drafts: Record<string, DraftEntry>, lineKey: string) {
+export function clearDraft(
+  drafts: Record<string, DraftEntry>,
+  lineKey: string,
+) {
   const next = { ...drafts }
   delete next[lineKey]
   return next

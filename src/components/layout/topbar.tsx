@@ -1,4 +1,12 @@
-import { Folder, FolderOpen, Moon, RefreshCw, Search, Sun, X } from 'lucide-react'
+import {
+  Folder,
+  FolderOpen,
+  Moon,
+  RefreshCw,
+  Search,
+  Sun,
+  X,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { KeyboardHint } from '@/components/shared'
@@ -105,7 +113,9 @@ export function Topbar({
                 disabled={isBusy}
                 title="重新扫描 (F5)"
               >
-                <RefreshCw className={cn('h-3.5 w-3.5', isBusy && 'animate-spin')} />
+                <RefreshCw
+                  className={cn('h-3.5 w-3.5', isBusy && 'animate-spin')}
+                />
                 重扫
                 <KeyboardHint>F5</KeyboardHint>
               </Button>

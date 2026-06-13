@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -113,14 +119,7 @@ export function SpriteView({
             ? true
             : (line.characterId ?? '旁白') === speakerFilter,
         ),
-    [
-      chapterId,
-      chapters,
-      drafts,
-      scope,
-      speakerFilter,
-      spriteLines,
-    ],
+    [chapterId, chapters, drafts, scope, speakerFilter, spriteLines],
   )
   const currentIndex = selectedLine
     ? filteredLines.findIndex((line) => lineKey(line) === lineKey(selectedLine))
@@ -137,24 +136,37 @@ export function SpriteView({
         : undefined
       const chapter = chapterForLine(chapters, line)
       const chapterMatches = chapter
-        ? `${chapter.title} ${chapter.entryLabel}`.toLowerCase().includes(normalizedQuery)
+        ? `${chapter.title} ${chapter.entryLabel}`
+            .toLowerCase()
+            .includes(normalizedQuery)
         : false
-      return chapterMatches || lineMatchesQuery(line, normalizedQuery, speakerName)
+      return (
+        chapterMatches || lineMatchesQuery(line, normalizedQuery, speakerName)
+      )
     })
   }, [chapters, characterById, filteredLines, normalizedQuery])
   const searchMatchLineKeys = useMemo(
     () => new Set(searchMatches.map((line) => lineKey(line))),
     [searchMatches],
   )
-  const totalWithCharacter = spriteLines.filter((line) => line.characterId).length
-  const totalDialogues = spriteLines.filter((line) => line.kind === 'dialogue').length
-  const totalDrafts = spriteLines.filter((line) => lineKey(line) in drafts).length
+  const totalWithCharacter = spriteLines.filter(
+    (line) => line.characterId,
+  ).length
+  const totalDialogues = spriteLines.filter(
+    (line) => line.kind === 'dialogue',
+  ).length
+  const totalDrafts = spriteLines.filter(
+    (line) => lineKey(line) in drafts,
+  ).length
 
-  const selectLineAndSyncState = useCallback((line: RpyLine) => {
-    onSelectLine(line)
-    const character = characters.find((item) => item.id === line.characterId)
-    onSelectState(findStateForLine(line, character?.states ?? [])?.id)
-  }, [characters, onSelectLine, onSelectState])
+  const selectLineAndSyncState = useCallback(
+    (line: RpyLine) => {
+      onSelectLine(line)
+      const character = characters.find((item) => item.id === line.characterId)
+      onSelectState(findStateForLine(line, character?.states ?? [])?.id)
+    },
+    [characters, onSelectLine, onSelectState],
+  )
 
   const selectedLineKey = selectedLine ? lineKey(selectedLine) : undefined
   const searchMatchPosition = selectedLineKey
@@ -182,7 +194,8 @@ export function SpriteView({
   ])
 
   function handlePrev() {
-    if (currentIndex > 0) selectLineAndSyncState(filteredLines[currentIndex - 1])
+    if (currentIndex > 0)
+      selectLineAndSyncState(filteredLines[currentIndex - 1])
   }
 
   function handleNext() {
@@ -197,12 +210,16 @@ export function SpriteView({
       ? searchMatches.findIndex((line) => lineKey(line) === selectedLineKey)
       : -1
     if (activeSearchIndex >= 0) {
-      const nextIndex = (activeSearchIndex + delta + searchMatches.length) % searchMatches.length
+      const nextIndex =
+        (activeSearchIndex + delta + searchMatches.length) %
+        searchMatches.length
       selectLineAndSyncState(searchMatches[nextIndex])
       return
     }
     if (currentIndex < 0) {
-      selectLineAndSyncState(delta > 0 ? searchMatches[0] : searchMatches[searchMatches.length - 1])
+      selectLineAndSyncState(
+        delta > 0 ? searchMatches[0] : searchMatches[searchMatches.length - 1],
+      )
       return
     }
     const indexedMatches = searchMatches.map((line) => ({
@@ -212,9 +229,11 @@ export function SpriteView({
     const previousMatch = [...indexedMatches]
       .reverse()
       .find((match) => match.index >= 0 && match.index < currentIndex)
-    const nextMatch = delta > 0
-      ? indexedMatches.find((match) => match.index > currentIndex) ?? indexedMatches[0]
-      : previousMatch ?? indexedMatches[indexedMatches.length - 1]
+    const nextMatch =
+      delta > 0
+        ? (indexedMatches.find((match) => match.index > currentIndex) ??
+          indexedMatches[0])
+        : (previousMatch ?? indexedMatches[indexedMatches.length - 1])
     selectLineAndSyncState(nextMatch.line)
   }
 
@@ -252,7 +271,9 @@ export function SpriteView({
         <Toolbar
           title="快速插入立绘"
           subtitle={`${filteredLines.length}/${spriteLines.length} 行 · ${spriteScopeLabel(scope)} · ${
-            currentCharacter?.displayName ?? selectedLine?.characterId ?? '未匹配角色'
+            currentCharacter?.displayName ??
+            selectedLine?.characterId ??
+            '未匹配角色'
           }`}
         >
           <Button
@@ -269,7 +290,9 @@ export function SpriteView({
             variant="outline"
             size="sm"
             onClick={handleNext}
-            disabled={currentIndex < 0 || currentIndex >= filteredLines.length - 1}
+            disabled={
+              currentIndex < 0 || currentIndex >= filteredLines.length - 1
+            }
             title="下一行 (J)"
           >
             <ChevronDown className="h-3.5 w-3.5" />
@@ -402,7 +425,8 @@ function SpriteFilterSidebar({
         </div>
         <p className="text-[11px] text-muted-foreground">
           {filteredLines}/{totalLines} 行 · {totalWithCharacter} 行有角色
-          {hasSearchQuery && ` · ${searchMatchPosition > 0 ? `${searchMatchPosition}/` : ''}${searchMatchCount} 命中`}
+          {hasSearchQuery &&
+            ` · ${searchMatchPosition > 0 ? `${searchMatchPosition}/` : ''}${searchMatchCount} 命中`}
         </p>
       </div>
       <div className="space-y-3 overflow-auto scrollbar-thin p-3">
@@ -566,7 +590,9 @@ function SpriteInspector({
             max={SPRITE_CARD_SCALE_MAX}
             step={SPRITE_CARD_SCALE_STEP}
             value={safeScale}
-            onChange={(event) => onSpriteCardScaleChange(Number(event.currentTarget.value))}
+            onChange={(event) =>
+              onSpriteCardScaleChange(Number(event.currentTarget.value))
+            }
             className="h-2 min-w-0 flex-1 cursor-pointer accent-info"
             aria-label="立绘卡片缩放"
           />
@@ -593,7 +619,11 @@ function SpriteInspector({
           <div className="space-y-3">
             <div className="rounded-md border border-border bg-secondary p-3">
               <DetailRow label="角色 id" value={character.id} />
-              <DetailRow label="当前操作" value={canApply ? '改写对白头部' : '请选择对白行'} monospace={false} />
+              <DetailRow
+                label="当前操作"
+                value={canApply ? '改写对白头部' : '请选择对白行'}
+                monospace={false}
+              />
             </div>
             <div className="flex flex-wrap content-start gap-3">
               {states.map((state) => (
@@ -651,12 +681,14 @@ function SpriteCard({
         'min-w-0 overflow-hidden rounded-md border border-border bg-card transition-colors',
         selected && 'border-info bg-accent ring-1 ring-info/30',
       )}
-      style={{
-        '--sprite-thumb-height': `${thumbnailHeight}px`,
-        '--sprite-image-max-height': `${imageMaxHeight}px`,
-        flex: `0 1 ${cardWidth}px`,
-        width: `${cardWidth}px`,
-      } as CSSProperties}
+      style={
+        {
+          '--sprite-thumb-height': `${thumbnailHeight}px`,
+          '--sprite-image-max-height': `${imageMaxHeight}px`,
+          flex: `0 1 ${cardWidth}px`,
+          width: `${cardWidth}px`,
+        } as CSSProperties
+      }
     >
       <button
         type="button"

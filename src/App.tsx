@@ -89,7 +89,9 @@ function isReviewStatus(value: unknown): value is ReviewStatus {
   )
 }
 
-function normalizeReviewMarks(value: unknown): Record<string, ReviewMark> | undefined {
+function normalizeReviewMarks(
+  value: unknown,
+): Record<string, ReviewMark> | undefined {
   if (!isRecord(value)) return undefined
   const marks: Record<string, ReviewMark> = {}
   const now = Date.now()
@@ -106,7 +108,8 @@ function normalizeReviewMarks(value: unknown): Record<string, ReviewMark> | unde
     const note = markValue.note
     if (markValue.status === 'unreviewed' && !note?.trim()) continue
     const updatedAt =
-      typeof markValue.updatedAt === 'number' && Number.isFinite(markValue.updatedAt)
+      typeof markValue.updatedAt === 'number' &&
+      Number.isFinite(markValue.updatedAt)
         ? markValue.updatedAt
         : now
     marks[importedLineKey] = {
@@ -120,11 +123,13 @@ function normalizeReviewMarks(value: unknown): Record<string, ReviewMark> | unde
 }
 
 function safeFileSegment(value: string) {
-  return value
-    .trim()
-    .replace(/[\\/:*?"<>|]+/g, '-')
-    .replace(/\s+/g, '-')
-    .slice(0, 80) || 'workspace'
+  return (
+    value
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .replace(/\s+/g, '-')
+      .slice(0, 80) || 'workspace'
+  )
 }
 
 function AppShell({
@@ -160,7 +165,9 @@ function AppShell({
     dirty: false,
     loading: false,
   })
-  const [drafts, setDrafts] = useState<Record<string, DraftEntry>>(() => loadDrafts())
+  const [drafts, setDrafts] = useState<Record<string, DraftEntry>>(() =>
+    loadDrafts(),
+  )
   const [reviewMarks, setReviewMarks] = useState(() => loadReviewMarks())
   const [characterOverrides, setCharacterOverrides] = useState(() =>
     loadCharacterOverrides(),
@@ -168,7 +175,9 @@ function AppShell({
   const [chapterOverrides, setChapterOverrides] = useState(() =>
     loadChapterOverrides(),
   )
-  const [assetRules, setAssetRules] = useState<AssetPathRule[]>(() => loadAssetRules())
+  const [assetRules, setAssetRules] = useState<AssetPathRule[]>(() =>
+    loadAssetRules(),
+  )
 
   const view = settings.view
   const assetTab = settings.assetTab
@@ -201,12 +210,24 @@ function AppShell({
   }, [])
 
   // Persist
-  useEffect(() => { saveSettings(settings) }, [settings])
-  useEffect(() => { saveDrafts(drafts) }, [drafts])
-  useEffect(() => { saveReviewMarks(reviewMarks) }, [reviewMarks])
-  useEffect(() => { saveCharacterOverrides(characterOverrides) }, [characterOverrides])
-  useEffect(() => { saveChapterOverrides(chapterOverrides) }, [chapterOverrides])
-  useEffect(() => { saveAssetRules(assetRules) }, [assetRules])
+  useEffect(() => {
+    saveSettings(settings)
+  }, [settings])
+  useEffect(() => {
+    saveDrafts(drafts)
+  }, [drafts])
+  useEffect(() => {
+    saveReviewMarks(reviewMarks)
+  }, [reviewMarks])
+  useEffect(() => {
+    saveCharacterOverrides(characterOverrides)
+  }, [characterOverrides])
+  useEffect(() => {
+    saveChapterOverrides(chapterOverrides)
+  }, [chapterOverrides])
+  useEffect(() => {
+    saveAssetRules(assetRules)
+  }, [assetRules])
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
@@ -241,7 +262,8 @@ function AppShell({
         setStatus(`已恢复工作区 ${reclassified.name}`)
       })
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : '恢复工作区失败'
+        const message =
+          error instanceof Error ? error.message : '恢复工作区失败'
         setStatus(message)
         toast.error('恢复工作区失败', message)
       })
@@ -251,7 +273,9 @@ function AppShell({
           setIsRestoring(false)
         }
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -270,8 +294,14 @@ function AppShell({
 
   // Persist last opened file
   useEffect(() => {
-    if (settings.rememberOpenFile && selectedFilePath !== settings.lastOpenedFile) {
-      setSettings((current) => ({ ...current, lastOpenedFile: selectedFilePath }))
+    if (
+      settings.rememberOpenFile &&
+      selectedFilePath !== settings.lastOpenedFile
+    ) {
+      setSettings((current) => ({
+        ...current,
+        lastOpenedFile: selectedFilePath,
+      }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFilePath])
@@ -333,14 +363,15 @@ function AppShell({
       : (selectedLine?.text ?? '')
   const currentDraftSpeakerId =
     currentDraft && 'speakerId' in currentDraft
-      ? currentDraft.speakerId ?? null
-      : selectedLine?.characterId ?? null
+      ? (currentDraft.speakerId ?? null)
+      : (selectedLine?.characterId ?? null)
   const dirty =
     selectedLine?.editable && draftKey
       ? currentDraft
         ? currentDraft.text !== (selectedLine.text ?? '') ||
           ('speakerId' in currentDraft &&
-            (currentDraft.speakerId ?? null) !== (selectedLine.characterId ?? null))
+            (currentDraft.speakerId ?? null) !==
+              (selectedLine.characterId ?? null))
         : false
       : false
 
@@ -350,7 +381,8 @@ function AppShell({
     if (!draft) return false
     return (
       draft.text !== (line.text ?? '') ||
-      ('speakerId' in draft && (draft.speakerId ?? null) !== (line.characterId ?? null))
+      ('speakerId' in draft &&
+        (draft.speakerId ?? null) !== (line.characterId ?? null))
     )
   }
 
@@ -403,7 +435,9 @@ function AppShell({
     setSelectedFilePath(filePath)
     const line =
       keepSelection && selectedLineKey
-        ? reclassified.index.lines.find((item) => lineKey(item) === selectedLineKey)
+        ? reclassified.index.lines.find(
+            (item) => lineKey(item) === selectedLineKey,
+          )
         : firstEditableLine(reclassified, filePath)
     setSelectedLineKey(line ? lineKey(line) : undefined)
     setSelectedStateId((current) => {
@@ -431,12 +465,15 @@ function AppShell({
       applySnapshot(next, false)
       setDrafts({})
       setSourceEditor({ content: '', dirty: false, loading: false })
-      setStatus(`已索引 ${next.files.length} 个文件，${next.index.lines.length} 行脚本`)
+      setStatus(
+        `已索引 ${next.files.length} 个文件，${next.index.lines.length} 行脚本`,
+      )
       toast.success('工作区已打开', `共索引 ${next.files.length} 个文件`)
     } catch (error) {
       const message = error instanceof Error ? error.message : '打开工作区失败'
       setStatus(message)
-      if (!message.toLowerCase().includes('abort')) toast.error('打开工作区失败', message)
+      if (!message.toLowerCase().includes('abort'))
+        toast.error('打开工作区失败', message)
     } finally {
       setIsBusy(false)
     }
@@ -493,7 +530,10 @@ function AppShell({
     }
   }
 
-  async function persistLines(filePath: string, mutate: (lines: string[]) => string[]) {
+  async function persistLines(
+    filePath: string,
+    mutate: (lines: string[]) => string[],
+  ) {
     if (!snapshot) return
     const file = snapshot.files.find((entry) => entry.path === filePath)
     if (!file) throw new Error(`文件 ${filePath} 不在当前工作区索引中`)
@@ -515,16 +555,16 @@ function AppShell({
     const nextText = targetDraft?.text ?? line.text ?? ''
     const nextSpeakerId =
       targetDraft && 'speakerId' in targetDraft
-        ? targetDraft.speakerId ?? null
-        : line.characterId ?? null
+        ? (targetDraft.speakerId ?? null)
+        : (line.characterId ?? null)
     setIsBusy(true)
     try {
       await persistLines(line.filePath, (lines) => {
         const next = [...lines]
-        const nextRaw = replaceLineSpeaker(replaceEditableLine(
-          line.raw,
-          nextText,
-        ), nextSpeakerId)
+        const nextRaw = replaceLineSpeaker(
+          replaceEditableLine(line.raw, nextText),
+          nextSpeakerId,
+        )
         next[line.lineNumber - 1] = nextRaw
         return next
       })
@@ -583,10 +623,15 @@ function AppShell({
   }
 
   function draftCountForFile(filePath: string) {
-    return Object.keys(drafts).filter((key) => key.startsWith(`${filePath}:`)).length
+    return Object.keys(drafts).filter((key) => key.startsWith(`${filePath}:`))
+      .length
   }
 
-  function selectNearestLine(next: WorkspaceSnapshot, filePath: string, lineNumber: number) {
+  function selectNearestLine(
+    next: WorkspaceSnapshot,
+    filePath: string,
+    lineNumber: number,
+  ) {
     const lines = next.index.linesByFile[filePath] ?? []
     const line =
       lines.find((item) => item.lineNumber >= lineNumber) ??
@@ -617,7 +662,10 @@ function AppShell({
     })
   }
 
-  async function handleInsertLine(position: 'before' | 'after', line = selectedLine) {
+  async function handleInsertLine(
+    position: 'before' | 'after',
+    line = selectedLine,
+  ) {
     if (!snapshot || !line) return
     const filePath = line.filePath
     if (sourceEditor.dirty && sourceEditor.path === filePath) {
@@ -877,7 +925,9 @@ function AppShell({
 
   async function handleSaveSource() {
     if (!snapshot || !sourceEditor.path || !sourceEditor.dirty) return
-    const file = snapshot.files.find((entry) => entry.path === sourceEditor.path)
+    const file = snapshot.files.find(
+      (entry) => entry.path === sourceEditor.path,
+    )
     if (!file) return
     setIsBusy(true)
     try {
@@ -952,7 +1002,9 @@ function AppShell({
 
   function handleUpdateCharacter(
     id: string,
-    patch: Partial<Pick<CharacterRegistryItem, 'displayName' | 'color' | 'note'>>,
+    patch: Partial<
+      Pick<CharacterRegistryItem, 'displayName' | 'color' | 'note'>
+    >,
   ) {
     setCharacterOverrides((current) => ({
       byId: { ...current.byId, [id]: { ...current.byId[id], ...patch } },
@@ -1059,7 +1111,8 @@ function AppShell({
     try {
       const text = await file.text()
       const parsed = JSON.parse(text) as unknown
-      const candidate = isRecord(parsed) && 'marks' in parsed ? parsed.marks : parsed
+      const candidate =
+        isRecord(parsed) && 'marks' in parsed ? parsed.marks : parsed
       const imported = normalizeReviewMarks(candidate)
       if (!imported) {
         toast.error('导入失败', '文件不是有效的校对数据 JSON')
@@ -1073,7 +1126,8 @@ function AppShell({
       setStatus(`已导入 ${count} 条校对记录`)
       toast.success('校对数据已导入', `${count} 条记录已合并到本地`)
     } catch (error) {
-      const message = error instanceof Error ? error.message : '读取导入文件失败'
+      const message =
+        error instanceof Error ? error.message : '读取导入文件失败'
       toast.error('导入失败', message)
     }
   }
@@ -1104,21 +1158,26 @@ function AppShell({
         requiresWorkspace: true,
         run: handleForgetWorkspace,
       },
-      ...(['home', 'visual', 'review', 'sprite', 'assets', 'about'] as ViewKey[]).map(
-        (target) => ({
-          id: `nav:${target}`,
-          title: `切换到 ${
-            target === 'home' ? '首页'
-              : target === 'visual' ? '可视化编辑器'
-                : target === 'review' ? '文本 Review'
-                  : target === 'sprite' ? '立绘库'
-                    : target === 'assets' ? '资产管理'
-                      : '关于'
-          }`,
-          group: '导航',
-          run: () => setView(target),
-        }),
-      ),
+      ...(
+        ['home', 'visual', 'review', 'sprite', 'assets', 'about'] as ViewKey[]
+      ).map((target) => ({
+        id: `nav:${target}`,
+        title: `切换到 ${
+          target === 'home'
+            ? '首页'
+            : target === 'visual'
+              ? '可视化编辑器'
+              : target === 'review'
+                ? '文本 Review'
+                : target === 'sprite'
+                  ? '立绘库'
+                  : target === 'assets'
+                    ? '资产管理'
+                    : '关于'
+        }`,
+        group: '导航',
+        run: () => setView(target),
+      })),
       {
         id: 'edit:save-line',
         title: '保存当前行',
@@ -1165,7 +1224,17 @@ function AppShell({
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [snapshot, drafts, selectedLine?.lineNumber, selectedLine?.filePath, selectedLine?.raw, currentDraftText, selectedState?.id, spritePosition, spriteTransition],
+    [
+      snapshot,
+      drafts,
+      selectedLine?.lineNumber,
+      selectedLine?.filePath,
+      selectedLine?.raw,
+      currentDraftText,
+      selectedState?.id,
+      spritePosition,
+      spriteTransition,
+    ],
   )
   useRegisterCommands(commands, [commands])
 
@@ -1188,10 +1257,26 @@ function AppShell({
         allowInInputs: true,
       },
       { combo: 'F5', handler: () => void handleRescan() },
-      { combo: 'j', handler: () => navigateLine(1), disabled: view !== 'sprite' },
-      { combo: 'k', handler: () => navigateLine(-1), disabled: view !== 'sprite' },
+      {
+        combo: 'j',
+        handler: () => navigateLine(1),
+        disabled: view !== 'sprite',
+      },
+      {
+        combo: 'k',
+        handler: () => navigateLine(-1),
+        disabled: view !== 'sprite',
+      },
     ],
-    [fileMode, sourceEditor.dirty, selectedLine, dirty, drafts, view, currentDraftText],
+    [
+      fileMode,
+      sourceEditor.dirty,
+      selectedLine,
+      dirty,
+      drafts,
+      view,
+      currentDraftText,
+    ],
   )
 
   function navigateLine(delta: number) {
@@ -1280,7 +1365,9 @@ function AppShell({
             }
             onCopy={handleCopy}
             onSaveLine={(line) => void handleSaveLine(line)}
-            onInsertLine={(position, line) => void handleInsertLine(position, line)}
+            onInsertLine={(position, line) =>
+              void handleInsertLine(position, line)
+            }
             onDeleteLine={(line) => void handleDeleteLine(line)}
             draftSpeakerId={currentDraftSpeakerId}
             draftText={currentDraftText}
@@ -1303,7 +1390,9 @@ function AppShell({
             setDraftText={setDraftText}
             setDraftSpeaker={setDraftSpeaker}
             onSaveLine={(line) => void handleSaveLine(line)}
-            onInsertLine={(position, line) => void handleInsertLine(position, line)}
+            onInsertLine={(position, line) =>
+              void handleInsertLine(position, line)
+            }
             onDeleteLine={(line) => void handleDeleteLine(line)}
             draftSpeakerId={currentDraftSpeakerId}
             onSaveAllDrafts={() => void handleSaveAllDrafts()}
@@ -1362,10 +1451,7 @@ function AppShell({
         )}
 
         {view === 'about' && (
-          <AboutView
-            theme={settings.theme}
-            setTheme={setTheme}
-          />
+          <AboutView theme={settings.theme} setTheme={setTheme} />
         )}
       </div>
     </div>
@@ -1401,10 +1487,14 @@ function AppBootScreen({
         <div className="w-[min(560px,100%)]">
           <div className="mb-3 flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase text-info">Loading...</p>
+              <p className="text-xs font-semibold uppercase text-info">
+                Loading...
+              </p>
               <h2 className="mt-1 text-2xl font-semibold">正在恢复编辑环境</h2>
             </div>
-            <span className="font-mono text-xs text-muted-foreground">IDB / FS</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              IDB / FS
+            </span>
           </div>
           <div className="overflow-hidden rounded-md border border-border bg-card">
             <div className="grid grid-cols-[7rem_minmax(0,1fr)] border-b border-border text-xs">

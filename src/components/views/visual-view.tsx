@@ -88,14 +88,27 @@ export function VisualView({
   })
   const visibleLines = useMemo(() => {
     const all = snapshot?.index.linesByFile[selectedFile?.path ?? ''] ?? []
-    return all
-      .filter((line) =>
-        ['dialogue', 'narration', 'show', 'scene', 'label', 'choice', 'menu'].includes(line.kind),
+    return all.filter((line) =>
+      [
+        'dialogue',
+        'narration',
+        'show',
+        'scene',
+        'label',
+        'choice',
+        'menu',
+      ].includes(line.kind),
     )
   }, [selectedFile?.path, snapshot])
   const normalizedQuery = query.trim().toLowerCase()
   const characterById = useMemo(
-    () => new Map((snapshot?.index.characters ?? []).map((character) => [character.id, character])),
+    () =>
+      new Map(
+        (snapshot?.index.characters ?? []).map((character) => [
+          character.id,
+          character,
+        ]),
+      ),
     [snapshot?.index.characters],
   )
   const searchMatchLineKeys = useMemo(() => {

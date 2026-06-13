@@ -30,7 +30,9 @@ export function CommandPaletteProvider({
   children: ReactNode
   workspaceReady: boolean
 }) {
-  const [registry, setRegistry] = useState<Record<string, CommandDefinition>>({})
+  const [registry, setRegistry] = useState<Record<string, CommandDefinition>>(
+    {},
+  )
   const [isOpen, setIsOpen] = useState(false)
   const idCounter = useRef(0)
 
@@ -119,7 +121,8 @@ function CommandPalette({
       .filter((command) => !command.requiresWorkspace || workspaceReady)
       .filter((command) => {
         if (!normalized) return true
-        const haystack = `${command.title} ${command.hint ?? ''} ${command.group ?? ''}`.toLowerCase()
+        const haystack =
+          `${command.title} ${command.hint ?? ''} ${command.group ?? ''}`.toLowerCase()
         return haystack.includes(normalized)
       })
   }, [commands, query, workspaceReady])
@@ -216,13 +219,21 @@ function CommandPalette({
           )}
         </div>
         <p className="m-0 border-t border-border bg-secondary px-3 py-2 text-[11px] text-muted-foreground">
-          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">↑</kbd>
-          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">↓</kbd>
-          {' '}选择 ·{' '}
-          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">Enter</kbd>
-          {' '}执行 ·{' '}
-          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">Esc</kbd>
-          {' '}关闭
+          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">
+            ↑
+          </kbd>
+          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">
+            ↓
+          </kbd>{' '}
+          选择 ·{' '}
+          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">
+            Enter
+          </kbd>{' '}
+          执行 ·{' '}
+          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">
+            Esc
+          </kbd>{' '}
+          关闭
         </p>
       </div>
     </div>

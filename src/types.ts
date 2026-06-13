@@ -143,7 +143,13 @@ export interface WorkspaceSnapshot {
   index: RpyIndex
 }
 
-export type ViewKey = 'home' | 'visual' | 'review' | 'sprite' | 'assets' | 'about'
+export type ViewKey =
+  | 'home'
+  | 'visual'
+  | 'review'
+  | 'sprite'
+  | 'assets'
+  | 'about'
 
 export type AssetTab = 'characters' | 'images' | 'audio' | 'chapters'
 
@@ -192,11 +198,19 @@ export interface UserSettings {
   reviewOperationPanelVisible: boolean
 }
 
-export type SpritePosition = 'left' | 'center' | 'right' | 'far_left' | 'far_right'
+export type SpritePosition =
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'far_left'
+  | 'far_right'
 
 export interface CharacterOverrides {
   /** key: character id */
-  byId: Record<string, NonNullable<CharacterRegistryItem['overrides']> & { note?: string }>
+  byId: Record<
+    string,
+    NonNullable<CharacterRegistryItem['overrides']> & { note?: string }
+  >
 }
 
 export interface ChapterOverrides {
@@ -216,7 +230,11 @@ export interface DraftEntry {
   updatedAt: number
 }
 
-export type ReviewStatus = 'unreviewed' | 'approved' | 'needs-change' | 'ignored'
+export type ReviewStatus =
+  | 'unreviewed'
+  | 'approved'
+  | 'needs-change'
+  | 'ignored'
 
 export interface ReviewMark {
   /** lineKey = filePath:lineNumber */

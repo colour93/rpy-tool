@@ -109,7 +109,8 @@ export function categoryFromPathHeuristic(path: string): AssetCategory {
   if (normalized.includes('/character') || normalized.includes('/sprite')) {
     return 'character'
   }
-  if (normalized.includes('/bg/') || normalized.includes('background')) return 'bg'
+  if (normalized.includes('/bg/') || normalized.includes('background'))
+    return 'bg'
   if (normalized.includes('/ui/')) return 'ui'
   if (normalized.includes('/fx/')) return 'fx'
   return normalized.match(/\.(ogg|mp3|wav|flac)$/) ? 'sfx' : 'cg'

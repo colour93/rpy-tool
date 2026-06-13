@@ -1,5 +1,8 @@
 export function normalizeSlashes(path: string) {
-  return path.replaceAll('\\', '/').replace(/^\/+/, '').replace(/^(\.\/)+/, '')
+  return path
+    .replaceAll('\\', '/')
+    .replace(/^\/+/, '')
+    .replace(/^(\.\/)+/, '')
 }
 
 export function normalizeRuntimePath(path: string) {

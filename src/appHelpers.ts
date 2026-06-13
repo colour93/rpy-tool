@@ -62,10 +62,15 @@ export function lineMatchesQuery(
     .includes(normalizedQuery)
 }
 
-export function firstEditableLine(snapshot?: WorkspaceSnapshot, filePath?: string) {
+export function firstEditableLine(
+  snapshot?: WorkspaceSnapshot,
+  filePath?: string,
+) {
   if (!snapshot) return undefined
   return (
-    snapshot.index.lines.find((line) => line.filePath === filePath && line.editable) ??
+    snapshot.index.lines.find(
+      (line) => line.filePath === filePath && line.editable,
+    ) ??
     snapshot.index.lines.find((line) => line.filePath === filePath) ??
     snapshot.index.lines.find((line) => line.editable) ??
     snapshot.index.lines[0]
@@ -73,9 +78,13 @@ export function firstEditableLine(snapshot?: WorkspaceSnapshot, filePath?: strin
 }
 
 export function chapterForLine(chapters: ChapterRegistryItem[], line: RpyLine) {
-  const sameFile = chapters.filter((chapter) => chapter.filePath === line.filePath)
+  const sameFile = chapters.filter(
+    (chapter) => chapter.filePath === line.filePath,
+  )
   return (
-    sameFile.filter((chapter) => chapter.lineNumber <= line.lineNumber).at(-1) ??
+    sameFile
+      .filter((chapter) => chapter.lineNumber <= line.lineNumber)
+      .at(-1) ??
     sameFile[0] ??
     chapters[0]
   )
@@ -90,7 +99,9 @@ export function chapterEditableLines(
   const chaptersInFile = snapshot.index.chapters.filter(
     (item) => item.filePath === chapter.filePath,
   )
-  const currentIndex = chaptersInFile.findIndex((item) => item.id === chapter.id)
+  const currentIndex = chaptersInFile.findIndex(
+    (item) => item.id === chapter.id,
+  )
   const nextChapter = chaptersInFile[currentIndex + 1]
   return snapshot.index.lines.filter(
     (line) =>
@@ -101,7 +112,10 @@ export function chapterEditableLines(
   )
 }
 
-export function countKind(snapshot: WorkspaceSnapshot | undefined, kind: FileEntry['kind']) {
+export function countKind(
+  snapshot: WorkspaceSnapshot | undefined,
+  kind: FileEntry['kind'],
+) {
   return snapshot?.files.filter((file) => file.kind === kind).length ?? 0
 }
 
@@ -126,7 +140,10 @@ export function assetReference(row: AssetRow) {
 }
 
 export function isSourceEditable(file: FileEntry) {
-  return (file.kind === 'rpy' || file.kind === 'text') && file.size <= SOURCE_SIZE_LIMIT
+  return (
+    (file.kind === 'rpy' || file.kind === 'text') &&
+    file.size <= SOURCE_SIZE_LIMIT
+  )
 }
 
 /**
@@ -168,7 +185,9 @@ export function getImageAssetRows(
 ): AssetRow[] {
   const normalized = query.trim().toLowerCase()
   const imageAssets = snapshot.index.assets.filter(
-    (asset) => asset.file?.kind === 'image' || /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(asset.path),
+    (asset) =>
+      asset.file?.kind === 'image' ||
+      /\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(asset.path),
   )
 
   return imageAssets
@@ -179,7 +198,9 @@ export function getImageAssetRows(
     })
     .filter((asset) => {
       if (!normalized) return true
-      return `${asset.path} ${asset.tags.join(' ')}`.toLowerCase().includes(normalized)
+      return `${asset.path} ${asset.tags.join(' ')}`
+        .toLowerCase()
+        .includes(normalized)
     })
     .map<AssetRow>((asset) => ({
       id: asset.id,
@@ -204,7 +225,9 @@ export function getAudioAssetRows(
 ): AssetRow[] {
   const normalized = query.trim().toLowerCase()
   const audioAssets = snapshot.index.assets.filter(
-    (asset) => asset.file?.kind === 'audio' || /\.(ogg|mp3|wav|flac|m4a)$/i.test(asset.path),
+    (asset) =>
+      asset.file?.kind === 'audio' ||
+      /\.(ogg|mp3|wav|flac|m4a)$/i.test(asset.path),
   )
 
   return audioAssets
@@ -215,7 +238,9 @@ export function getAudioAssetRows(
     })
     .filter((asset) => {
       if (!normalized) return true
-      return `${asset.path} ${asset.tags.join(' ')}`.toLowerCase().includes(normalized)
+      return `${asset.path} ${asset.tags.join(' ')}`
+        .toLowerCase()
+        .includes(normalized)
     })
     .map<AssetRow>((asset) => ({
       id: asset.id,
@@ -281,32 +306,42 @@ export function getChapterAssetRows(
     }))
 }
 
-export function buildJourney(snapshot: WorkspaceSnapshot | undefined): JourneyStep[] {
+export function buildJourney(
+  snapshot: WorkspaceSnapshot | undefined,
+): JourneyStep[] {
   const hasWorkspace = Boolean(snapshot)
   const hasRpy = countKind(snapshot, 'rpy') > 0
-  const hasEditable = (snapshot?.index.lines.filter((line) => line.editable).length ?? 0) > 0
-  const hasSprites = snapshot?.index.characters.some((character) => character.states.length > 0) ?? false
+  const hasEditable =
+    (snapshot?.index.lines.filter((line) => line.editable).length ?? 0) > 0
+  const hasSprites =
+    snapshot?.index.characters.some(
+      (character) => character.states.length > 0,
+    ) ?? false
   const hasAssets = (snapshot?.index.assets.length ?? 0) > 0
 
   return [
     {
       id: 'open',
       title: '打开项目',
-      meta: hasWorkspace ? snapshot?.name ?? '已打开' : '选择 RenPy 根目录',
+      meta: hasWorkspace ? (snapshot?.name ?? '已打开') : '选择 RenPy 根目录',
       state: hasWorkspace ? 'done' : 'active',
       target: 'home',
     },
     {
       id: 'index',
       title: '建立索引',
-      meta: hasRpy ? `${countKind(snapshot, 'rpy')} 个脚本文件` : '等待 .rpy 文件',
+      meta: hasRpy
+        ? `${countKind(snapshot, 'rpy')} 个脚本文件`
+        : '等待 .rpy 文件',
       state: !hasWorkspace ? 'waiting' : hasRpy ? 'done' : 'active',
       target: 'visual',
     },
     {
       id: 'write',
       title: '逐行编辑',
-      meta: hasEditable ? `${snapshot?.index.lines.filter((line) => line.editable).length} 行可写` : '等待对白或旁白',
+      meta: hasEditable
+        ? `${snapshot?.index.lines.filter((line) => line.editable).length} 行可写`
+        : '等待对白或旁白',
       state: !hasRpy ? 'waiting' : hasEditable ? 'active' : 'waiting',
       target: 'visual',
     },
@@ -320,7 +355,9 @@ export function buildJourney(snapshot: WorkspaceSnapshot | undefined): JourneySt
     {
       id: 'assets',
       title: '资源整理',
-      meta: hasAssets ? `${snapshot?.index.assets.length} 个候选` : '等待图片或音频',
+      meta: hasAssets
+        ? `${snapshot?.index.assets.length} 个候选`
+        : '等待图片或音频',
       state: !hasWorkspace ? 'waiting' : hasAssets ? 'active' : 'waiting',
       target: 'assets',
     },
@@ -343,20 +380,28 @@ export function buildHealthItems(snapshot: WorkspaceSnapshot | undefined) {
     ]
   }
 
-  const errorCount = snapshot.index.diagnostics.filter((d) => d.severity === 'error').length
-  const warnCount = snapshot.index.diagnostics.filter((d) => d.severity === 'warning').length
+  const errorCount = snapshot.index.diagnostics.filter(
+    (d) => d.severity === 'error',
+  ).length
+  const warnCount = snapshot.index.diagnostics.filter(
+    (d) => d.severity === 'warning',
+  ).length
   const unreferenced = snapshot.index.assets.filter((a) => !a.referenced).length
 
   return [
     {
       label: '脚本索引',
       value: `${countKind(snapshot, 'rpy')} 个 .rpy`,
-      level: countKind(snapshot, 'rpy') > 0 ? ('ok' as const) : ('warning' as const),
+      level:
+        countKind(snapshot, 'rpy') > 0 ? ('ok' as const) : ('warning' as const),
     },
     {
       label: '章节入口',
       value: `${snapshot.index.chapters.length} 个 label`,
-      level: snapshot.index.chapters.length > 0 ? ('ok' as const) : ('warning' as const),
+      level:
+        snapshot.index.chapters.length > 0
+          ? ('ok' as const)
+          : ('warning' as const),
     },
     {
       label: '未引用资源',
@@ -365,7 +410,11 @@ export function buildHealthItems(snapshot: WorkspaceSnapshot | undefined) {
     },
     {
       label: '诊断',
-      value: errorCount ? `${errorCount} 错误 · ${warnCount} 警告` : warnCount ? `${warnCount} 警告` : '无阻塞项',
+      value: errorCount
+        ? `${errorCount} 错误 · ${warnCount} 警告`
+        : warnCount
+          ? `${warnCount} 警告`
+          : '无阻塞项',
       level: errorCount || warnCount ? ('warning' as const) : ('ok' as const),
     },
   ]

@@ -112,7 +112,12 @@ export function MonacoSourceEditor({
   }, [theme])
 
   return (
-    <div className={cn('relative h-full w-full overflow-hidden bg-card', className)}>
+    <div
+      className={cn(
+        'relative h-full w-full overflow-hidden bg-card',
+        className,
+      )}
+    >
       <div ref={containerRef} className="h-full w-full" />
       {!ready && <EditorFallback />}
     </div>
@@ -175,8 +180,10 @@ function configureRenpyLanguage(monacoInstance: typeof monaco) {
       { open: '{', close: '}' },
     ],
     indentationRules: {
-      increaseIndentPattern: /^\s*(?:label|menu|screen|transform|init|python|if|elif|else|for|while|try|except|finally|with|imagebutton|button|vbox|hbox|frame|viewport)\b.*:\s*(?:#.*)?$/,
-      decreaseIndentPattern: /^\s*(?:elif|else|except|finally)\b.*:\s*(?:#.*)?$/,
+      increaseIndentPattern:
+        /^\s*(?:label|menu|screen|transform|init|python|if|elif|else|for|while|try|except|finally|with|imagebutton|button|vbox|hbox|frame|viewport)\b.*:\s*(?:#.*)?$/,
+      decreaseIndentPattern:
+        /^\s*(?:elif|else|except|finally)\b.*:\s*(?:#.*)?$/,
     },
   })
 
@@ -251,22 +258,43 @@ function configureRenpyLanguage(monacoInstance: typeof monaco) {
     tokenizer: {
       root: [
         [/^\s*#.*$/, 'comment'],
-        [/^\s*(label)(\s+)([A-Za-z_][\w.]*)(\s*:)/, ['keyword', '', 'type.identifier', 'delimiter']],
+        [
+          /^\s*(label)(\s+)([A-Za-z_][\w.]*)(\s*:)/,
+          ['keyword', '', 'type.identifier', 'delimiter'],
+        ],
         [/^\s*(menu|init|python|screen|transform|style)(\b)/, ['keyword', '']],
-        [/^\s*(image)(\s+)([A-Za-z_][\w\s.-]*?)(\s*=)/, ['keyword', '', 'type.identifier', 'operator']],
-        [/^\s*(define|default)(\s+)([A-Za-z_]\w*)(\s*=)/, ['keyword', '', 'variable.predefined', 'operator']],
-        [/^\s*(scene|show|hide)(\s+)([A-Za-z_][\w\s.-]*)/, ['keyword', '', 'string.key']],
-        [/^\s*(play|queue|stop|voice)(\s+)([A-Za-z_][\w\s.-]*)?/, ['keyword', '', 'string.key']],
-        [/^\s*(jump|call)(\s+)([A-Za-z_][\w.]*)/, ['keyword', '', 'type.identifier']],
+        [
+          /^\s*(image)(\s+)([A-Za-z_][\w\s.-]*?)(\s*=)/,
+          ['keyword', '', 'type.identifier', 'operator'],
+        ],
+        [
+          /^\s*(define|default)(\s+)([A-Za-z_]\w*)(\s*=)/,
+          ['keyword', '', 'variable.predefined', 'operator'],
+        ],
+        [
+          /^\s*(scene|show|hide)(\s+)([A-Za-z_][\w\s.-]*)/,
+          ['keyword', '', 'string.key'],
+        ],
+        [
+          /^\s*(play|queue|stop|voice)(\s+)([A-Za-z_][\w\s.-]*)?/,
+          ['keyword', '', 'string.key'],
+        ],
+        [
+          /^\s*(jump|call)(\s+)([A-Za-z_][\w.]*)/,
+          ['keyword', '', 'type.identifier'],
+        ],
         [/[A-Za-z_]\w*(?=\s*")/, 'variable.predefined'],
-        [/[A-Za-z_]\w*/, {
-          cases: {
-            '@keywords': 'keyword',
-            '@constants': 'constant',
-            '@operators': 'operator',
-            '@default': 'identifier',
+        [
+          /[A-Za-z_]\w*/,
+          {
+            cases: {
+              '@keywords': 'keyword',
+              '@constants': 'constant',
+              '@operators': 'operator',
+              '@default': 'identifier',
+            },
           },
-        }],
+        ],
         [/"([^"\\]|\\.)*$/, 'string.invalid'],
         [/"/, 'string', '@doubleString'],
         [/'([^'\\]|\\.)*$/, 'string.invalid'],
