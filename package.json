@@ -11,7 +11,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "preview": "vite preview",
-    "deploy:pages": "npm run build && npx wrangler@latest pages deploy dist --project-name rpy-tool"
+    "deploy:pages": "pnpm run build && pnpm dlx wrangler@latest pages deploy dist --project-name rpy-tool"
   },
   "dependencies": {
     "monaco-editor": "^0.55.1",
