@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type {
   AssetTab,
   CharacterRegistryItem,
@@ -14,6 +21,7 @@ import type {
   SourceEditorState,
   SpritePosition,
   ThemeMode,
+  TourGuideStepId,
   UserSettings,
   ViewKey,
   WorkspaceSnapshot,
@@ -75,6 +83,10 @@ import { ReviewView } from '@/components/views/review-view'
 import { SpriteView } from '@/components/views/sprite-view'
 import { AssetsView } from '@/components/views/assets-view'
 import { AboutView } from '@/components/views/about-view'
+import {
+  TourGuide,
+} from '@/components/tour-guide'
+import { tourGuideSteps } from '@/services/tour-guide'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -140,8 +152,12 @@ function AppShell({
   const toast = useToast()
   const dialog = useDialog()
   const palette = useCommandPalette()
+  const prefersReducedMotion = useReducedMotion()
 
   const [settings, setSettings] = useState<UserSettings>(() => loadSettings())
+  const [tourGuideOpen, setTourGuideOpen] = useState(
+    () => !settings.tourGuideCompleted,
+  )
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | undefined>()
   const [status, setStatus] = useState('准备打开 RenPy 工作区')
   const [isBusy, setIsBusy] = useState(false)
@@ -190,11 +206,37 @@ function AppShell({
   const setTheme = useCallback((theme: ThemeMode) => {
     setSettings((current) => ({ ...current, theme }))
   }, [])
+  const setMotionEnabled = useCallback((motionEnabled: boolean) => {
+    setSettings((current) => ({ ...current, motionEnabled }))
+  }, [])
   const toggleTheme = useCallback(() => {
     setSettings((current) => ({
       ...current,
       theme: current.theme === 'dark' ? 'light' : 'dark',
     }))
+  }, [])
+  const openTourGuide = useCallback(() => {
+    setSettings((current) => ({
+      ...current,
+      tourGuideCompleted: false,
+      tourGuideCurrentStepId: tourGuideSteps[0].id,
+    }))
+    setTourGuideOpen(true)
+  }, [])
+  const setTourGuideStep = useCallback((stepId: TourGuideStepId) => {
+    setSettings((current) => ({ ...current, tourGuideCurrentStepId: stepId }))
+  }, [])
+  const completeTourGuide = useCallback(() => {
+    setTourGuideOpen(false)
+    setSettings((current) => ({
+      ...current,
+      tourGuideCompleted: true,
+      tourGuideCurrentStepId: tourGuideSteps[tourGuideSteps.length - 1].id,
+    }))
+  }, [])
+  const skipTourGuide = useCallback(() => {
+    setTourGuideOpen(false)
+    setSettings((current) => ({ ...current, tourGuideCompleted: true }))
   }, [])
   const toggleReviewOperationPanel = useCallback(() => {
     setSettings((current) => ({
@@ -1294,6 +1336,7 @@ function AppShell({
 
   const draftCount = Object.keys(drafts).length
   const diagnosticCount = snapshot?.index.diagnostics.length ?? 0
+  const shouldAnimate = settings.motionEnabled && !prefersReducedMotion
 
   if (isRestoring) {
     return <AppBootScreen status={status} theme={settings.theme} />
@@ -1314,6 +1357,7 @@ function AppShell({
         hasUnsaved={hasUnsaved}
         theme={settings.theme}
         onToggleTheme={toggleTheme}
+        onOpenTourGuide={openTourGuide}
       />
 
       <StatusRail
@@ -1325,136 +1369,179 @@ function AppShell({
         diagnosticCount={diagnosticCount}
       />
 
-      <div className="flex-1 overflow-hidden">
-        {view === 'home' && (
-          <HomeView
-            snapshot={snapshot}
-            status={status}
-            onNavigate={setView}
-            onOpen={handleOpenWorkspace}
-            onJumpDiagnostic={handleJumpDiagnostic}
-            isBusy={isBusy}
-            hasUnsaved={hasUnsaved}
-            unsavedCount={draftCount}
-          />
-        )}
+      <div className="relative flex-1 overflow-hidden">
+        <AnimatePresence mode="wait" initial={false}>
+          <MotionView key={view} enabled={shouldAnimate}>
+            {view === 'home' && (
+              <HomeView
+                snapshot={snapshot}
+                status={status}
+                onNavigate={setView}
+                onOpen={handleOpenWorkspace}
+                onJumpDiagnostic={handleJumpDiagnostic}
+                isBusy={isBusy}
+                hasUnsaved={hasUnsaved}
+                unsavedCount={draftCount}
+              />
+            )}
 
-        {view === 'visual' && (
-          <VisualView
-            snapshot={snapshot}
-            query={query}
-            setQuery={setQuery}
-            files={fileRows}
-            selectedFile={selectedFile}
-            onSelectFile={handleSelectFile}
-            selectedLine={selectedLine}
-            onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
-            selectedChapter={selectedChapter}
-            fileMode={fileMode}
-            setFileMode={setFileMode}
-            sourceEditor={sourceEditor}
-            onLoadSource={() => void handleLoadSource()}
-            onSaveSource={() => void handleSaveSource()}
-            onChangeSource={(content) =>
-              setSourceEditor((current) => ({
-                ...current,
-                content,
-                dirty: true,
-                message: '有未保存修改',
-              }))
-            }
-            onCopy={handleCopy}
-            onSaveLine={(line) => void handleSaveLine(line)}
-            onInsertLine={(position, line) =>
-              void handleInsertLine(position, line)
-            }
-            onDeleteLine={(line) => void handleDeleteLine(line)}
-            draftSpeakerId={currentDraftSpeakerId}
-            draftText={currentDraftText}
-            setDraftText={setDraftText}
-            setDraftSpeaker={setDraftSpeaker}
-            isBusy={isBusy}
-            dirty={dirty}
-            canSaveLine={isLineDirty}
-            dirtyByFile={dirtyByFile}
-            theme={settings.theme}
-          />
-        )}
+            {view === 'visual' && (
+              <VisualView
+                snapshot={snapshot}
+                query={query}
+                setQuery={setQuery}
+                files={fileRows}
+                selectedFile={selectedFile}
+                onSelectFile={handleSelectFile}
+                selectedLine={selectedLine}
+                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                selectedChapter={selectedChapter}
+                fileMode={fileMode}
+                setFileMode={setFileMode}
+                sourceEditor={sourceEditor}
+                onLoadSource={() => void handleLoadSource()}
+                onSaveSource={() => void handleSaveSource()}
+                onChangeSource={(content) =>
+                  setSourceEditor((current) => ({
+                    ...current,
+                    content,
+                    dirty: true,
+                    message: '有未保存修改',
+                  }))
+                }
+                onCopy={handleCopy}
+                onSaveLine={(line) => void handleSaveLine(line)}
+                onInsertLine={(position, line) =>
+                  void handleInsertLine(position, line)
+                }
+                onDeleteLine={(line) => void handleDeleteLine(line)}
+                draftSpeakerId={currentDraftSpeakerId}
+                draftText={currentDraftText}
+                setDraftText={setDraftText}
+                setDraftSpeaker={setDraftSpeaker}
+                isBusy={isBusy}
+                dirty={dirty}
+                canSaveLine={isLineDirty}
+                dirtyByFile={dirtyByFile}
+                theme={settings.theme}
+              />
+            )}
 
-        {view === 'review' && (
-          <ReviewView
-            snapshot={snapshot}
-            selectedLine={selectedLine}
-            onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
-            draftText={currentDraftText}
-            setDraftText={setDraftText}
-            setDraftSpeaker={setDraftSpeaker}
-            onSaveLine={(line) => void handleSaveLine(line)}
-            onInsertLine={(position, line) =>
-              void handleInsertLine(position, line)
-            }
-            onDeleteLine={(line) => void handleDeleteLine(line)}
-            draftSpeakerId={currentDraftSpeakerId}
-            onSaveAllDrafts={() => void handleSaveAllDrafts()}
-            isBusy={isBusy}
-            dirty={dirty}
-            canSaveLine={isLineDirty}
-            onCopy={handleCopy}
-            drafts={drafts}
-            reviewMarks={reviewMarks}
-            onMarkReview={handleMarkReview}
-            onClearReviewMark={handleClearReviewMark}
-            onUpdateReviewNote={handleUpdateReviewNote}
-            onExportReviewMarks={handleExportReviewMarks}
-            onImportReviewMarks={(file) => void handleImportReviewMarks(file)}
-            onJumpToLine={handleJumpToLine}
-            showLineOperationPanel={settings.reviewOperationPanelVisible}
-            onToggleLineOperationPanel={toggleReviewOperationPanel}
-          />
-        )}
+            {view === 'review' && (
+              <ReviewView
+                snapshot={snapshot}
+                selectedLine={selectedLine}
+                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                draftText={currentDraftText}
+                setDraftText={setDraftText}
+                setDraftSpeaker={setDraftSpeaker}
+                onSaveLine={(line) => void handleSaveLine(line)}
+                onInsertLine={(position, line) =>
+                  void handleInsertLine(position, line)
+                }
+                onDeleteLine={(line) => void handleDeleteLine(line)}
+                draftSpeakerId={currentDraftSpeakerId}
+                onSaveAllDrafts={() => void handleSaveAllDrafts()}
+                isBusy={isBusy}
+                dirty={dirty}
+                canSaveLine={isLineDirty}
+                onCopy={handleCopy}
+                drafts={drafts}
+                reviewMarks={reviewMarks}
+                onMarkReview={handleMarkReview}
+                onClearReviewMark={handleClearReviewMark}
+                onUpdateReviewNote={handleUpdateReviewNote}
+                onExportReviewMarks={handleExportReviewMarks}
+                onImportReviewMarks={(file) =>
+                  void handleImportReviewMarks(file)
+                }
+                onJumpToLine={handleJumpToLine}
+                showLineOperationPanel={settings.reviewOperationPanelVisible}
+                onToggleLineOperationPanel={toggleReviewOperationPanel}
+              />
+            )}
 
-        {view === 'sprite' && (
-          <SpriteView
-            snapshot={snapshot}
-            selectedLine={selectedLine}
-            selectedState={selectedState}
-            onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
-            onSelectState={setSelectedStateId}
-            onApplyState={(state) => {
-              void handleApplyDialogueSprite(state)
-            }}
-            onJumpToDefinition={handleJumpToLine}
-            isBusy={isBusy}
-            drafts={drafts}
-            spriteCardScale={settings.spriteCardScale}
-            onSpriteCardScaleChange={setSpriteCardScale}
-          />
-        )}
+            {view === 'sprite' && (
+              <SpriteView
+                snapshot={snapshot}
+                selectedLine={selectedLine}
+                selectedState={selectedState}
+                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                onSelectState={setSelectedStateId}
+                onApplyState={(state) => {
+                  void handleApplyDialogueSprite(state)
+                }}
+                onJumpToDefinition={handleJumpToLine}
+                isBusy={isBusy}
+                drafts={drafts}
+                spriteCardScale={settings.spriteCardScale}
+                onSpriteCardScaleChange={setSpriteCardScale}
+              />
+            )}
 
-        {view === 'assets' && (
-          <AssetsView
-            snapshot={snapshot}
-            assetTab={assetTab}
-            setAssetTab={(tab) => {
-              setAssetTab(tab)
-              setSelectedAssetId(undefined)
-            }}
-            selectedAssetId={selectedAssetId}
-            onSelectAsset={setSelectedAssetId}
-            onCopy={handleCopy}
-            onUpdateCharacter={handleUpdateCharacter}
-            onUpdateChapter={handleUpdateChapter}
-            onJumpToLine={handleJumpToLine}
-            rules={assetRules}
-            setRules={setAssetRules}
-          />
-        )}
+            {view === 'assets' && (
+              <AssetsView
+                snapshot={snapshot}
+                assetTab={assetTab}
+                setAssetTab={(tab) => {
+                  setAssetTab(tab)
+                  setSelectedAssetId(undefined)
+                }}
+                selectedAssetId={selectedAssetId}
+                onSelectAsset={setSelectedAssetId}
+                onCopy={handleCopy}
+                onUpdateCharacter={handleUpdateCharacter}
+                onUpdateChapter={handleUpdateChapter}
+                onJumpToLine={handleJumpToLine}
+                rules={assetRules}
+                setRules={setAssetRules}
+              />
+            )}
 
-        {view === 'about' && (
-          <AboutView theme={settings.theme} setTheme={setTheme} />
-        )}
+            {view === 'about' && (
+              <AboutView
+                theme={settings.theme}
+                setTheme={setTheme}
+                motionEnabled={settings.motionEnabled}
+                setMotionEnabled={setMotionEnabled}
+                onOpenTourGuide={openTourGuide}
+              />
+            )}
+          </MotionView>
+        </AnimatePresence>
       </div>
+      <TourGuide
+        open={tourGuideOpen}
+        currentStepId={settings.tourGuideCurrentStepId}
+        snapshot={snapshot}
+        motionEnabled={settings.motionEnabled}
+        onOpenChange={setTourGuideOpen}
+        onStepChange={setTourGuideStep}
+        onNavigate={setView}
+        onComplete={completeTourGuide}
+        onSkip={skipTourGuide}
+      />
     </div>
+  )
+}
+
+function MotionView({
+  enabled,
+  children,
+}: {
+  enabled: boolean
+  children: ReactNode
+}) {
+  return (
+    <motion.div
+      className="absolute inset-0 overflow-hidden"
+      initial={enabled ? { opacity: 0, y: 8 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      exit={enabled ? { opacity: 0, y: -6 } : undefined}
+      transition={enabled ? { duration: 0.16, ease: 'easeOut' } : { duration: 0 }}
+    >
+      {children}
+    </motion.div>
   )
 }
 

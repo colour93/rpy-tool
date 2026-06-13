@@ -45,7 +45,10 @@ export function HomeView({
   return (
     <main className="h-[calc(100vh-var(--shell-chrome))] overflow-auto scrollbar-thin">
       <div className="mx-auto grid max-w-7xl gap-5 p-6">
-        <section className="rounded-lg border border-border-strong bg-card p-5">
+        <section
+          className="rounded-lg border border-border-strong bg-card p-5"
+          data-tour="home-overview"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase text-muted-foreground">

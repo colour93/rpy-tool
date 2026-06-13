@@ -1,6 +1,7 @@
 import {
   Folder,
   FolderOpen,
+  HelpCircle,
   Moon,
   RefreshCw,
   Search,
@@ -27,6 +28,7 @@ interface TopbarProps {
   hasUnsaved: boolean
   theme: ThemeMode
   onToggleTheme: () => void
+  onOpenTourGuide: () => void
 }
 
 export function Topbar({
@@ -42,12 +44,14 @@ export function Topbar({
   hasUnsaved,
   theme,
   onToggleTheme,
+  onOpenTourGuide,
 }: TopbarProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-card">
       <div className="flex h-14 items-center gap-3 px-4">
         <button
           type="button"
+          data-tour="app-brand"
           onClick={() => setView('home')}
           className="flex items-center gap-2 font-bold transition-opacity hover:opacity-80"
         >
@@ -80,6 +84,7 @@ export function Topbar({
 
         <div className="ml-auto flex items-center gap-2">
           <Button
+            data-tour="command-settings"
             variant="outline"
             size="sm"
             onClick={onOpenCommandPalette}
@@ -87,6 +92,15 @@ export function Topbar({
           >
             <Search className="h-3.5 w-3.5" />
             <KeyboardHint>Ctrl+K</KeyboardHint>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenTourGuide}
+            title="用户旅程引导"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            引导
           </Button>
           <Button
             variant="outline"
@@ -133,6 +147,7 @@ export function Topbar({
                 size="sm"
                 onClick={onOpen}
                 disabled={isBusy}
+                data-tour="workspace-action"
               >
                 <FolderOpen className="h-3.5 w-3.5" />
                 换一个
@@ -144,6 +159,7 @@ export function Topbar({
               size="sm"
               onClick={onOpen}
               disabled={isBusy}
+              data-tour="workspace-action"
             >
               <Folder className="h-3.5 w-3.5" />
               打开工作区

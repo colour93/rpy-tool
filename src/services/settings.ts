@@ -44,6 +44,9 @@ const defaultSettings: UserSettings = {
   lastOpenedFile: undefined,
   autosaveDrafts: true,
   reviewOperationPanelVisible: true,
+  motionEnabled: true,
+  tourGuideCompleted: false,
+  tourGuideCurrentStepId: undefined,
 }
 
 export function loadSettings(): UserSettings {

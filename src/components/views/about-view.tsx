@@ -1,36 +1,69 @@
-import { Moon, Sun } from 'lucide-react'
+import { HelpCircle, Moon, Sparkles, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ThemeMode } from '@/types'
 
 export function AboutView({
   theme,
   setTheme,
+  motionEnabled,
+  setMotionEnabled,
+  onOpenTourGuide,
 }: {
   theme: ThemeMode
   setTheme: (theme: ThemeMode) => void
+  motionEnabled: boolean
+  setMotionEnabled: (enabled: boolean) => void
+  onOpenTourGuide: () => void
 }) {
   return (
     <main className="h-[calc(100vh-var(--shell-chrome))] overflow-auto scrollbar-thin">
       <div className="mx-auto grid max-w-4xl gap-5 p-6">
-        <section className="rounded-lg border border-border bg-card p-5">
+        <section
+          className="rounded-lg border border-border bg-card p-5"
+          data-tour="about-settings"
+        >
           <div className="flex items-center justify-between gap-3 mb-2">
             <h1 className="text-xl font-semibold">关于</h1>
-            <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+            <div
+              className="flex flex-wrap items-center justify-end gap-2"
+              data-tour="about-guide-actions"
+            >
+              <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+                <Button
+                  variant={theme === 'light' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setTheme('light')}
+                  title="浅色模式"
+                >
+                  <Sun className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={theme === 'dark' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setTheme('dark')}
+                  title="深色模式"
+                >
+                  <Moon className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <Button
-                variant={theme === 'light' ? 'secondary' : 'ghost'}
+                variant={motionEnabled ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setTheme('light')}
-                title="浅色模式"
+                onClick={() => setMotionEnabled(!motionEnabled)}
+                aria-pressed={motionEnabled}
+                title="切换过渡动画"
               >
-                <Sun className="h-3.5 w-3.5" />
+                <Sparkles className="h-3.5 w-3.5" />
+                动画
               </Button>
               <Button
-                variant={theme === 'dark' ? 'secondary' : 'ghost'}
+                variant="outline"
                 size="sm"
-                onClick={() => setTheme('dark')}
-                title="深色模式"
+                onClick={onOpenTourGuide}
+                title="重新打开用户旅程引导"
               >
-                <Moon className="h-3.5 w-3.5" />
+                <HelpCircle className="h-3.5 w-3.5" />
+                引导
               </Button>
             </div>
           </div>

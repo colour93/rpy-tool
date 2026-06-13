@@ -563,7 +563,10 @@ function SpriteInspector({
   const imageMaxHeight = Math.round(SPRITE_IMAGE_BASE_MAX_HEIGHT * scaleRatio)
 
   return (
-    <aside className="flex h-full flex-col overflow-hidden border-l border-border bg-card">
+    <aside
+      className="flex h-full flex-col overflow-hidden border-l border-border bg-card"
+      data-tour="sprite-inspector"
+    >
       <div className="space-y-2 border-b border-border p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="truncate text-base font-semibold">
@@ -576,7 +579,10 @@ function SpriteInspector({
             ? `${selectedLine.filePath}:${selectedLine.lineNumber}`
             : '请选择一行台词'}
         </p>
-        <div className="flex items-center gap-3 rounded-md border border-border bg-secondary/70 px-3 py-2">
+        <div
+          className="flex items-center gap-3 rounded-md border border-border bg-secondary/70 px-3 py-2"
+          data-tour="sprite-scale"
+        >
           <label
             htmlFor="sprite-card-scale"
             className="shrink-0 text-[11px] font-medium text-muted-foreground"

@@ -17,6 +17,7 @@
 - **Light/Dark theme** — `UserSettings.theme` 持久化，根节点 `data-theme` + `dark` class 驱动 CSS token
 - **shadcn/ui 风格自建组件** — `Button`, `Badge`, `Input`, `Textarea`, `Separator`, `ScrollArea`
 - **Sonner** — Toast 通知层，`useToast()` 保留业务调用适配
+- **Motion** (`motion/react`) — 视图切换、用户旅程引导 overlay / 聚光定位 / 卡片切换过渡
 - **Monaco Editor** (`monaco-editor`) — IDE 类首屏同步加载，本地打包到 `dist`，不走外部 CDN
 - **lucide-react** — 图标
 - **minimatch** — 资产路径规则 glob 匹配
@@ -62,7 +63,7 @@ FileSystemDirectoryHandle (IndexedDB)
 |------|-----|------|
 | IndexedDB `workspace` | `current` | `FileSystemDirectoryHandle` |
 | IndexedDB `thumbnails` | `path:size:mtime` | 缩略图 Blob |
-| localStorage | `rpy-tool:settings` | `UserSettings`（含 theme/view/assetTab/spriteCardScale/reviewOperationPanelVisible 等） |
+| localStorage | `rpy-tool:settings` | `UserSettings`（含 theme/view/assetTab/spriteCardScale/reviewOperationPanelVisible/motionEnabled/tourGuideCompleted/tourGuideCurrentStepId 等） |
 | localStorage | `rpy-tool:drafts` | `{lineKey: DraftEntry}`，包含文本草稿与可选 `speakerId` |
 | localStorage | `rpy-tool:characters` | `CharacterOverrides` |
 | localStorage | `rpy-tool:chapters` | `ChapterOverrides` |
@@ -89,6 +90,8 @@ FileSystemDirectoryHandle (IndexedDB)
   - 所有主视图 sidebar 必须支持鼠标横向拖拽调整宽度，使用 `useResizableSidebar()` + `SidebarResizeHandle`
   - resize handle 的布局列统一使用 `12px` 命中区，中间只显示细分隔线，避免 6px 热区过窄
   - 可 resize 区域只做最小宽度限制，不做最大宽度限制，用户可以按工作区实际空间继续拉宽
+  - 视图切换由 `MotionView` 包裹，只做整页轻量 opacity/y 过渡，不给 `LineList` 虚拟滚动行逐项加动画
+  - motion 受 `UserSettings.motionEnabled` 与系统 reduced-motion 偏好共同控制
 
 ## 首页与关于页
 
@@ -99,7 +102,33 @@ FileSystemDirectoryHandle (IndexedDB)
 
 文案原则：优先短标题、短状态、短按钮；避免解释型 description 堆叠。
 
-关于页（`about-view.tsx`）先保持空壳，用作后续信息与设置入口；当前只放主题调整控件。
+关于页（`about-view.tsx`）先保持空壳，用作后续信息与设置入口；当前放主题调整、过渡动画开关和重新打开用户旅程引导。
+
+## 用户旅程引导（Tour Guide）
+
+实现入口：
+- `services/tour-guide.ts`: `tourGuideSteps` 配置，按用户旅程定义步骤、目标视图、DOM anchor 和是否需要工作区。
+- `components/tour-guide.tsx`: `TourGuide` overlay，使用 `motion/react` 的 `AnimatePresence` / `motion` 做遮罩、聚光框和卡片切换。
+- `App.tsx`: 管理 `tourGuideOpen`、当前步骤、完成 / 跳过状态，并在步骤变化时切换到对应视图。
+
+引导步骤（从产品 / 用户旅程角度重排，一般不介绍首页）：
+1. 项目说明（本地离线、强烈建议先做版本管理、定位为编写后的校对 / 审阅 / 修改 / 立绘查分，暂不覆盖前期流程）
+2. 打开工作区（说明应选 game 目录或项目根目录）
+3. 资产管理（简介分类工作原理，指引设置路径规则）
+4. 立绘快插（简介逐行查分套用立绘的作用）
+5. 文本 Review（校对核心：队列筛选 + 1/2/3/0 状态快捷键 + 备注 / 导入导出）
+6. 可视化编辑器（定位为备用编辑，简介如何切换打开 Monaco 源文件）
+7. 关于（简介可从关于页 / 顶栏「引导」按钮再次打开引导）
+
+关键约束：
+- 没有工作区时只展示 `requiresWorkspace` 为假的步骤（项目说明、打开工作区）；打开工作区后才补齐资产、立绘、编辑、关于步骤。
+- 点击关闭只临时收起，不标记完成；点击跳过或完成才写入 `tourGuideCompleted`。
+- Tour anchor 使用 `data-tour="..."`，新增步骤必须优先锚定稳定的小控件 / 小区域（例如 mode switch、slider、按钮组），不要直接锚定整页工作区。
+- 聚光框只读取目标元素 `getBoundingClientRect()`，不得改变业务布局；定位失败时退回 fallback rect 并用整屏 scrim。
+- 引导卡片定位走 `placeCard()` 算法：先测量卡片自身 `offsetWidth/Height`，按聚光框中心对齐选 下 / 上 / 右 / 左 中第一个放得下的方向；目标过大（如整屏 workbench 面板）放不下时，钉到剩余空间最大的边，不再让卡片悬空或随意压住聚光框。
+- 遮罩只用聚光框的 `box-shadow` 大扩散实现，高亮元素保持明亮；整屏只放一个透明 click-catcher 负责点击空白关闭。
+- 大面积锚点仅作为 fallback，必须从元素中心收敛为局部 spotlight（当前上限 720×220），步骤卡片必须 clamp 在视口内，避免框选工作区过大导致溢出和错位。
+- 重新打开引导从第一步（项目说明）开始，入口在 Topbar「引导」按钮与关于页。
 
 ## 资产分类系统
 
@@ -305,6 +334,7 @@ src/
 │   ├── workspace.ts              # 扫描 + 增量重扫 + .gitignore
 │   ├── rpyParser.ts              # 行级正则解析
 │   ├── settings.ts               # 4 类持久化
+│   ├── tour-guide.ts             # 用户旅程引导步骤配置
 │   ├── asset-rules.ts            # 路径规则匹配
 │   ├── storage.ts                # IndexedDB 封装
 │   └── thumbnails.ts             # createImageBitmap + IDB 缓存
@@ -320,6 +350,7 @@ src/
 │   ├── editor/
 │   │   └── monaco-editor.tsx     # Monaco 本地同步加载 + Ren'Py token provider
 │   ├── shared.tsx                # LineList/FileSidebar/Toolbar/图片预览/行号跳转/拖拽分隔条
+│   ├── tour-guide.tsx            # Motion 引导 overlay / spotlight / 步骤卡片
 │   └── views/
 │       ├── home-view.tsx
 │       ├── visual-view.tsx       # 可视化行编辑；右侧 SpritePicker 暂停展示
@@ -373,6 +404,8 @@ src/
 ✅ 39. 新增首屏 boot screen：`index.html` 静态兜底 + React 恢复工作区启动屏，并移除重复 `restoreWorkspace()`
 ✅ 40. 路径规则编辑器实时预览 glob 命中数与按优先级实际生效数
 ✅ 41. 图片预览支持 50%–300% 缩放和透明棋盘背景，资产详情与全屏预览共用控件
+✅ 42. 引入 `motion`，为主视图切换和用户旅程引导提供轻量过渡动画，并支持 `UserSettings.motionEnabled` 关闭
+✅ 43. 按产品 / 用户旅程重排 Tour Guide：项目说明 → 打开工作区 → 资产管理 → 立绘快插 → 文本 Review → 可视化编辑器 → 关于；不再介绍首页，无工作区时仅展示项目说明与打开工作区
 
 ## 命令快捷键
 
@@ -382,16 +415,18 @@ src/
 - `F5`: 重扫工作区
 - `J / K`: Review / 立绘快插视图上下行（不在输入控件中时）
 - Review: `1` 通过、`2` 需修改、`3` 忽略、`0` 重置；`Ctrl/Cmd+A` 全选当前队列，`Esc` 取消多选
+- Tour Guide: `Esc` 临时关闭，`← / →` 上一步 / 下一步
 - 命令面板额外提供：在当前行上方插入、下方插入、删除当前行、插入 show
 
 ## 验证（已通过）
 
 - ✅ `pnpm exec tsc -b` 类型检查通过
 - ✅ `pnpm run lint` 通过
-- ✅ `pnpm run build` 构建通过：2988 modules；Monaco 主体、worker 与语言模块均输出到 `dist/assets`
-- ✅ 本地 Vite 页面 `http://localhost:5174/` 可打开，浏览器控制台无 error
+- ✅ `pnpm run build` 构建通过：3392 modules；Monaco 主体、worker、语言模块与 motion 依赖均输出到 `dist/assets`
+- ✅ 本地 Vite dev server 已启动到 `http://localhost:5175/`（5173/5174 被占用后自动换端口），PowerShell `Invoke-WebRequest` 返回 200
 - ✅ 路径别名 `@/*` 在 ts/vite 双侧生效
 - ✅ `dist` 中无 `cdn.jsdelivr.net` / `jsdelivr` / `unpkg` Monaco loader 依赖；`monaco-editor@` 命中仅为 Monaco 内部 DOM selector 文本
+- ⚠️ 本轮未完成浏览器自动视觉检查：当前 Browser 插件目录缺少其说明要求的 `scripts/browser-client.mjs`
 
 ## 仍可优化项
 

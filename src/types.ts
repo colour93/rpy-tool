@@ -175,6 +175,26 @@ export type FileMode = 'structured' | 'source'
 
 export type ThemeMode = 'light' | 'dark'
 
+export type TourGuideStepId =
+  | 'intro'
+  | 'open-workspace'
+  | 'asset-rules'
+  | 'sprite-apply'
+  | 'review-pass'
+  | 'visual-edit'
+  | 'about-guide'
+
+export interface TourGuideStep {
+  id: TourGuideStepId
+  stage: string
+  title: string
+  body: string
+  view: ViewKey
+  anchor: string
+  spotlight?: 'full' | 'center'
+  requiresWorkspace?: boolean
+}
+
 export interface SourceEditorState {
   path?: string
   content: string
@@ -196,6 +216,9 @@ export interface UserSettings {
   lastOpenedFile?: string
   autosaveDrafts: boolean
   reviewOperationPanelVisible: boolean
+  motionEnabled: boolean
+  tourGuideCompleted: boolean
+  tourGuideCurrentStepId?: TourGuideStepId
 }
 
 export type SpritePosition =

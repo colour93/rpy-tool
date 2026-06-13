@@ -146,7 +146,10 @@ export function VisualView({
       <SidebarResizeHandle onPointerDown={leftSidebar.startResize} />
 
       {/* 中栏：编辑区 */}
-      <section className="flex h-full flex-col overflow-hidden">
+      <section
+        className="flex h-full flex-col overflow-hidden"
+        data-tour="visual-workbench"
+      >
         <Toolbar
           title={selectedFile?.path ?? '未选择文件'}
           subtitle={
@@ -155,7 +158,10 @@ export function VisualView({
               : '等待脚本索引'
           }
         >
-          <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+          <div
+            className="flex items-center gap-1 rounded-md bg-secondary p-1"
+            data-tour="visual-mode-switch"
+          >
             <button
               type="button"
               onClick={() => setFileMode('structured')}

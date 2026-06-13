@@ -573,7 +573,10 @@ export function ReviewView({
       />
       <SidebarResizeHandle onPointerDown={leftSidebar.startResize} />
 
-      <section className="flex h-full flex-col overflow-hidden">
+      <section
+        className="flex h-full flex-col overflow-hidden"
+        data-tour="review-workbench"
+      >
         <input
           ref={importInputRef}
           type="file"
@@ -990,7 +993,7 @@ function ReviewInspector({
   onJumpToLine: (filePath: string, lineNumber: number) => void
 }) {
   return (
-    <aside className="flex h-full flex-col overflow-hidden border-l border-border bg-card">
+    <aside className="flex h-full flex-col overflow-hidden border-l border-border bg-card" data-tour="review-inspector">
       <div className="border-b border-border p-4">
         <h2 className="text-base font-semibold">校对详情</h2>
       </div>

@@ -227,6 +227,7 @@ export function AssetsView({
             variant="outline"
             size="sm"
             onClick={() => setRulesOpen(true)}
+            data-tour="asset-rules"
           >
             路径规则 ({rules.length})
           </Button>
