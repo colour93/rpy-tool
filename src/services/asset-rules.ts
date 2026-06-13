@@ -78,18 +78,27 @@ export function matchAssetCategory(
   filePath: string,
   rules: AssetPathRule[],
 ): AssetCategory | undefined {
-  const normalized = normalizePathKey(filePath)
   const sorted = rules
     .filter((rule) => rule.enabled)
     .sort((a, b) => b.priority - a.priority)
 
   for (const rule of sorted) {
-    if (minimatch(normalized, normalizePathKey(rule.pattern))) {
+    if (assetRuleMatchesPath(filePath, rule.pattern)) {
       return rule.category
     }
   }
 
   return undefined
+}
+
+export function assetRuleMatchesPath(filePath: string, pattern: string) {
+  const normalizedPattern = normalizePathKey(pattern.trim())
+  if (!normalizedPattern) return false
+  try {
+    return minimatch(normalizePathKey(filePath), normalizedPattern)
+  } catch {
+    return false
+  }
 }
 
 export function categoryFromPathHeuristic(path: string): AssetCategory {

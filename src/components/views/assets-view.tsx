@@ -35,6 +35,7 @@ import type {
   WorkspaceSnapshot,
 } from '@/types'
 import {
+  assetRuleMatchesPath,
   categoryFromPathHeuristic,
   type AssetPathRule,
 } from '@/services/asset-rules'
@@ -69,6 +70,11 @@ interface DirectoryOption {
   pattern: string
   count: number
   category: AssetCategory
+}
+
+interface RulePreviewStats {
+  matched: number
+  applied: number
 }
 
 export function AssetsView({
@@ -653,6 +659,10 @@ function RulesEditor({
     () => buildDirectoryOptions(snapshot),
     [snapshot],
   )
+  const rulePreviewStats = useMemo(
+    () => buildRulePreviewStats(snapshot, rules),
+    [snapshot, rules],
+  )
   const directorySidebar = useResizableSidebar({
     key: 'rpy-tool:sidebar:asset-rules-directories',
     initial: 300,
@@ -734,67 +744,84 @@ function RulesEditor({
             {rules
               .slice()
               .sort((a, b) => b.priority - a.priority)
-              .map((rule) => (
-                <div
-                  key={rule.id}
-                  onFocus={() => setActiveRuleId(rule.id)}
-                  onClick={() => setActiveRuleId(rule.id)}
-                  className={cn(
-                    'grid grid-cols-[minmax(0,2fr)_minmax(120px,1fr)_80px_60px_auto] items-center gap-3 rounded-md border border-border bg-card p-3',
-                    !rule.enabled && 'opacity-60',
-                    activeRuleId === rule.id && 'border-info ring-1 ring-info/30',
-                  )}
-                >
-                  <input
-                    type="text"
-                    value={rule.pattern}
-                    onChange={(event) => updateRule(rule.id, { pattern: event.target.value })}
-                    placeholder="images/characters/**/*"
-                    className="h-8 min-w-0 rounded-md border border-border bg-card px-2 font-mono text-xs"
-                  />
-                  <select
-                    value={rule.category}
-                    onChange={(event) =>
-                      updateRule(rule.id, { category: event.target.value as AssetCategory })
-                    }
-                    title="资产分类"
-                    aria-label="资产分类"
-                    className="h-8 min-w-0 rounded-md border border-border bg-card px-2 text-xs"
+              .map((rule) => {
+                const stats = rulePreviewStats.get(rule.id) ?? { matched: 0, applied: 0 }
+                return (
+                  <div
+                    key={rule.id}
+                    onFocus={() => setActiveRuleId(rule.id)}
+                    onClick={() => setActiveRuleId(rule.id)}
+                    className={cn(
+                      'grid grid-cols-[minmax(0,2fr)_minmax(120px,1fr)_80px_128px_60px_auto] items-center gap-3 rounded-md border border-border bg-card p-3',
+                      !rule.enabled && 'opacity-60',
+                      activeRuleId === rule.id && 'border-info ring-1 ring-info/30',
+                    )}
                   >
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {categoryLabel[cat]}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    value={rule.priority}
-                    onChange={(event) =>
-                      updateRule(rule.id, { priority: Number(event.target.value) || 0 })
-                    }
-                    title="优先级（高优先级先匹配）"
-                    className="h-8 rounded-md border border-border bg-card px-2 text-xs"
-                  />
-                  <label className="flex items-center gap-1 text-xs">
                     <input
-                      type="checkbox"
-                      checked={rule.enabled}
-                      onChange={(event) => updateRule(rule.id, { enabled: event.target.checked })}
-                      className="h-3 w-3"
+                      type="text"
+                      value={rule.pattern}
+                      onChange={(event) => updateRule(rule.id, { pattern: event.target.value })}
+                      placeholder="images/characters/**/*"
+                      className="h-8 min-w-0 rounded-md border border-border bg-card px-2 font-mono text-xs"
                     />
-                    启用
-                  </label>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteRule(rule.id)}
-                    title="删除规则"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
+                    <select
+                      value={rule.category}
+                      onChange={(event) =>
+                        updateRule(rule.id, { category: event.target.value as AssetCategory })
+                      }
+                      title="资产分类"
+                      aria-label="资产分类"
+                      className="h-8 min-w-0 rounded-md border border-border bg-card px-2 text-xs"
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {categoryLabel[cat]}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      value={rule.priority}
+                      onChange={(event) =>
+                        updateRule(rule.id, { priority: Number(event.target.value) || 0 })
+                      }
+                      title="优先级（高优先级先匹配）"
+                      className="h-8 rounded-md border border-border bg-card px-2 text-xs"
+                    />
+                    <div className="flex min-w-0 flex-wrap gap-1" title="命中为 glob 匹配数；生效为按优先级决定分类的资源数">
+                      <Badge
+                        variant={rule.enabled && stats.applied > 0 ? 'info' : 'muted'}
+                        className="normal-case tracking-normal"
+                      >
+                        生效 {stats.applied}
+                      </Badge>
+                      <Badge
+                        variant={stats.matched > 0 ? 'default' : 'muted'}
+                        className="normal-case tracking-normal"
+                      >
+                        命中 {stats.matched}
+                      </Badge>
+                    </div>
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={rule.enabled}
+                        onChange={(event) => updateRule(rule.id, { enabled: event.target.checked })}
+                        className="h-3 w-3"
+                      />
+                      启用
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteRule(rule.id)}
+                      title="删除规则"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )
+              })}
             {rules.length === 0 && (
               <EmptyState
                 title="暂无路径规则"
@@ -882,4 +909,39 @@ function buildDirectoryOptions(snapshot: WorkspaceSnapshot | undefined): Directo
     }))
     .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
     .slice(0, 160)
+}
+
+function buildRulePreviewStats(
+  snapshot: WorkspaceSnapshot | undefined,
+  rules: AssetPathRule[],
+) {
+  const stats = new Map<string, RulePreviewStats>()
+  for (const rule of rules) {
+    stats.set(rule.id, { matched: 0, applied: 0 })
+  }
+  if (!snapshot) return stats
+
+  const sortedRules = rules
+    .map((rule, index) => ({ rule, index }))
+    .filter(({ rule }) => rule.enabled)
+    .sort((a, b) => b.rule.priority - a.rule.priority || a.index - b.index)
+
+  for (const asset of snapshot.index.assets) {
+    for (const rule of rules) {
+      if (assetRuleMatchesPath(asset.path, rule.pattern)) {
+        const current = stats.get(rule.id)
+        if (current) current.matched += 1
+      }
+    }
+
+    const appliedRule = sortedRules.find(({ rule }) =>
+      assetRuleMatchesPath(asset.path, rule.pattern),
+    )?.rule
+    if (appliedRule) {
+      const current = stats.get(appliedRule.id)
+      if (current) current.applied += 1
+    }
+  }
+
+  return stats
 }

@@ -85,6 +85,32 @@
     background: var(--color-border-strong);
     border-radius: 4px;
   }
+
+  .checkerboard-bg {
+    background-color: var(--color-card);
+    background-image:
+      linear-gradient(45deg, var(--color-border) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--color-border) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--color-border) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--color-border) 75%);
+    background-position:
+      0 0,
+      0 8px,
+      8px -8px,
+      -8px 0;
+    background-size: 16px 16px;
+  }
+}
+
+@keyframes boot-progress {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  60%,
+  100% {
+    transform: translateX(320%);
+  }
 }
 
 /* Layout shell measurements */

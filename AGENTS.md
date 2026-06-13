@@ -16,7 +16,8 @@
 - **Tailwind CSS 4** (`@tailwindcss/vite` 插件) — 唯一样式来源，**已删除 App.css**
 - **Light/Dark theme** — `UserSettings.theme` 持久化，根节点 `data-theme` + `dark` class 驱动 CSS token
 - **shadcn/ui 风格自建组件** — `Button`, `Badge`, `Input`, `Textarea`, `Separator`, `ScrollArea`
-- **Monaco Editor** (`@monaco-editor/react`) — 通过 `React.lazy()` 动态加载
+- **Sonner** — Toast 通知层，`useToast()` 保留业务调用适配
+- **Monaco Editor** (`monaco-editor`) — IDE 类首屏同步加载，本地打包到 `dist`，不走外部 CDN
 - **lucide-react** — 图标
 - **minimatch** — 资产路径规则 glob 匹配
 - **clsx + tailwind-merge + cva** — class 合并
@@ -70,6 +71,11 @@ FileSystemDirectoryHandle (IndexedDB)
 | localStorage | `rpy-tool:sidebar:*` | 用户拖拽后的 sidebar 宽度 |
 
 ## Layout Shell（关键约束）
+
+首屏启动：
+- `index.html` 内置轻量静态 boot screen，覆盖 JS bundle 下载与 React 初始化前空白期
+- `AppShell` 在恢复 IndexedDB 工作区句柄期间显示 IDE 风格启动屏，完成后进入正常 shell
+- 命令面板可用状态由真实 `snapshot` 驱动，避免额外调用 `restoreWorkspace()`
 
 布局根：`<div className="flex h-screen flex-col">`
 - **顶栏 Topbar**: `h-14` (3.5rem) — Brand + 主导航 + 工作区操作 + 命令面板
@@ -130,6 +136,7 @@ interface AssetPathRule {
 - 若没有高亮规则，则自动新建规则
 - 分类使用 `categoryFromPathHeuristic()` 预填，用户仍可用下拉框调整
 - 目录选择 sidebar 本身也支持拖拽调整宽度
+- 规则行实时显示「命中 / 生效」数量：命中为 glob 直接匹配资源数，生效为按优先级 first-match 后实际决定分类的资源数
 
 ## 图片预览与全屏查看
 
@@ -143,6 +150,7 @@ interface AssetPathRule {
 - 预览必须遵从原图原比例，使用 `max-h/max-w + object-contain`，不得用固定 `aspect-video` 或 `h-full w-full` 强行铺满导致比例失真
 - 所有图片资源都应可点击全屏展示，全屏层用 portal 挂到 `document.body`
 - 全屏预览按 `Esc` 或点击遮罩关闭
+- 资产详情图片预览和全屏预览提供缩放比例控制（50%–300%）与透明棋盘背景开关
 - 若图片文件无法匹配，才允许退回颜色占位；正常角色/立绘位置不应显示“前两个字母”占位
 
 ## 立绘快插与立绘候选
@@ -257,15 +265,16 @@ define tamu_c = Character("塔木", image="tamu")
 ## Monaco 集成
 
 `components/editor/monaco-editor.tsx`：
-- `React.lazy()` 动态导入 `@monaco-editor/react`
-- 自动按文件扩展名选择 language（rpy/py → python）
+- 直接使用 `monaco-editor` 创建 editor/model，构建产物进入 `dist/assets`，不依赖 `@monaco-editor/loader` 或 CDN fallback
+- 自动按文件扩展名选择 language（rpy → `renpy`，py → `python`）
+- 内置 Ren'Py Monarch token provider：label/image/define/show/scene/play/voice/jump/call/menu/python 等行级语法高亮
 - 主题跟随 `UserSettings.theme`（light → `vs`, dark → `vs-dark`）、字体 Cascadia Mono、字号 13、tab=4
 - `automaticLayout: true` 自适应容器尺寸
 
 ## React 最佳实践应用
 
 按 Vercel 规范：
-- ✅ `bundle-dynamic-imports` — Monaco 用 `React.lazy()` (split into 13.93KB chunk)
+- ✅ `bundle-local-monaco` — IDE 类应用同步加载 Monaco，并用本地 `monaco-editor` 打包，避免运行时外部 CDN 请求
 - ✅ `bundle-barrel-imports` — 直接导入组件，无 barrel
 - ✅ `rerender-derived-state-no-effect` — `selectedFile/selectedLine/selectedChapter/dirtyByFile` 全用 `useMemo` 派生
 - ✅ `rerender-functional-setstate` — `setDrafts(prev => ...)` 维持回调稳定
@@ -286,7 +295,7 @@ src/
 ├── lib/
 │   └── cn.ts                     # twMerge + clsx
 ├── hooks/
-│   ├── useToast.tsx              # Tailwind Toast
+│   ├── useToast.tsx              # Sonner Toast 适配
 │   ├── useDialog.tsx             # Tailwind Dialog
 │   ├── useCommandPalette.tsx     # Cmd+K 命令面板
 │   ├── useHotkeys.ts
@@ -309,7 +318,7 @@ src/
 │   │   ├── topbar.tsx            # 含路径栏
 │   │   └── status-rail.tsx
 │   ├── editor/
-│   │   └── monaco-editor.tsx     # React.lazy
+│   │   └── monaco-editor.tsx     # Monaco 本地同步加载 + Ren'Py token provider
 │   ├── shared.tsx                # LineList/FileSidebar/Toolbar/图片预览/行号跳转/拖拽分隔条
 │   └── views/
 │       ├── home-view.tsx
@@ -359,6 +368,11 @@ src/
 ✅ 34. Review 校对支持 `1 / 2 / 3 / 0` 状态快捷键、执行后自动跳转下一行，并支持 Shift 连选、Ctrl/Cmd 多选、Ctrl/Cmd+A 全选当前队列、Esc 取消多选
 ✅ 35. Review 支持备注 / 修改意见、校对 JSON 导入 / 导出，以及底部修改栏显示 / 隐藏持久化
 ✅ 36. 文件索引、校对队列、立绘快插搜索统一改为非过滤式命中导航，显示命中数并支持上 / 下跳转
+✅ 37. shadcn Sonner 替换自建 Toast，保留 `useToast()` 业务 API 作为适配层
+✅ 38. Monaco 改为 IDE 类同步加载，直接使用本地 `monaco-editor` 打包到 `dist`，并新增 Ren'Py 语法 token provider
+✅ 39. 新增首屏 boot screen：`index.html` 静态兜底 + React 恢复工作区启动屏，并移除重复 `restoreWorkspace()`
+✅ 40. 路径规则编辑器实时预览 glob 命中数与按优先级实际生效数
+✅ 41. 图片预览支持 50%–300% 缩放和透明棋盘背景，资产详情与全屏预览共用控件
 
 ## 命令快捷键
 
@@ -372,16 +386,13 @@ src/
 
 ## 验证（已通过）
 
-- ✅ `npx tsc -b` 类型检查通过
-- ✅ `npm run lint` 通过
-- ✅ `npm run build` 构建通过：1794 modules（含 Monaco lazy chunk 13.93KB）
-- ✅ 本地 Vite 页面 `http://127.0.0.1:5173/` 可打开，浏览器控制台无 error
+- ✅ `pnpm exec tsc -b` 类型检查通过
+- ✅ `pnpm run lint` 通过
+- ✅ `pnpm run build` 构建通过：2988 modules；Monaco 主体、worker 与语言模块均输出到 `dist/assets`
+- ✅ 本地 Vite 页面 `http://localhost:5174/` 可打开，浏览器控制台无 error
 - ✅ 路径别名 `@/*` 在 ts/vite 双侧生效
-- ✅ Monaco 仅在用户切换到源文件模式时才下载（懒加载）
+- ✅ `dist` 中无 `cdn.jsdelivr.net` / `jsdelivr` / `unpkg` Monaco loader 依赖；`monaco-editor@` 命中仅为 Monaco 内部 DOM selector 文本
 
 ## 仍可优化项
 
-- [ ] shadcn Sonner 替换自建 Toast（更动画一致性）
-- [ ] Monaco 自定义 Ren'Py 语法 token provider
-- [ ] 路径规则实时预览匹配文件数
-- [ ] 图片预览可选缩放比例 / 透明棋盘背景
+暂无。上一轮优化项已完成并回写到本文件。

@@ -127,7 +127,11 @@ function safeFileSegment(value: string) {
     .slice(0, 80) || 'workspace'
 }
 
-function AppShell() {
+function AppShell({
+  onWorkspaceReadyChange,
+}: {
+  onWorkspaceReadyChange: (ready: boolean) => void
+}) {
   const toast = useToast()
   const dialog = useDialog()
   const palette = useCommandPalette()
@@ -136,6 +140,7 @@ function AppShell() {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | undefined>()
   const [status, setStatus] = useState('准备打开 RenPy 工作区')
   const [isBusy, setIsBusy] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(true)
   const [query, setQuery] = useState('')
   const [selectedFilePath, setSelectedFilePath] = useState<string | undefined>(
     settings.lastOpenedFile,
@@ -206,6 +211,9 @@ function AppShell() {
     document.documentElement.dataset.theme = settings.theme
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
   }, [settings.theme])
+  useEffect(() => {
+    onWorkspaceReadyChange(Boolean(snapshot))
+  }, [onWorkspaceReadyChange, snapshot])
 
   // Restore
   useEffect(() => {
@@ -238,7 +246,10 @@ function AppShell() {
         toast.error('恢复工作区失败', message)
       })
       .finally(() => {
-        if (!cancelled) setIsBusy(false)
+        if (!cancelled) {
+          setIsBusy(false)
+          setIsRestoring(false)
+        }
       })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1199,6 +1210,10 @@ function AppShell() {
   const draftCount = Object.keys(drafts).length
   const diagnosticCount = snapshot?.index.diagnostics.length ?? 0
 
+  if (isRestoring) {
+    return <AppBootScreen status={status} theme={settings.theme} />
+  }
+
   return (
     <div className="flex h-screen flex-col">
       <Topbar
@@ -1357,6 +1372,69 @@ function AppShell() {
   )
 }
 
+function AppBootScreen({
+  status,
+  theme,
+}: {
+  status: string
+  theme: ThemeMode
+}) {
+  return (
+    <div
+      className="flex h-screen flex-col bg-background text-foreground"
+      data-theme={theme}
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="flex h-14 items-center border-b border-border px-5">
+        <div className="flex items-center gap-3">
+          <span className="grid h-7 w-7 place-items-center rounded-md border border-border bg-card font-mono text-xs font-bold">
+            RP
+          </span>
+          <div>
+            <h1 className="text-sm font-semibold">Ren'Py Tool</h1>
+            <p className="text-[11px] text-muted-foreground">启动工作区</p>
+          </div>
+        </div>
+      </div>
+      <div className="grid flex-1 place-items-center p-6">
+        <div className="w-[min(560px,100%)]">
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase text-info">Loading...</p>
+              <h2 className="mt-1 text-2xl font-semibold">正在恢复编辑环境</h2>
+            </div>
+            <span className="font-mono text-xs text-muted-foreground">IDB / FS</span>
+          </div>
+          <div className="overflow-hidden rounded-md border border-border bg-card">
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] border-b border-border text-xs">
+              <span className="border-r border-border px-3 py-2 font-mono text-muted-foreground">
+                workspace
+              </span>
+              <span className="truncate px-3 py-2">{status}</span>
+            </div>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] border-b border-border text-xs">
+              <span className="border-r border-border px-3 py-2 font-mono text-muted-foreground">
+                editor
+              </span>
+              <span className="truncate px-3 py-2">Monaco 本地模块准备中</span>
+            </div>
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] text-xs">
+              <span className="border-r border-border px-3 py-2 font-mono text-muted-foreground">
+                index
+              </span>
+              <span className="truncate px-3 py-2">等待脚本索引与资产规则</span>
+            </div>
+            <div className="h-1 overflow-hidden bg-secondary">
+              <div className="h-full w-1/3 animate-[boot-progress_1.15s_ease-in-out_infinite] bg-info" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function applyOverrides(
   snapshot: WorkspaceSnapshot,
   characterOverrides: ReturnType<typeof loadCharacterOverrides>,
@@ -1388,30 +1466,9 @@ export default function App() {
     <ToastProvider>
       <DialogProvider>
         <CommandPaletteProvider workspaceReady={workspaceReady}>
-          <ReadyTracker onReady={setWorkspaceReady}>
-            <AppShell />
-          </ReadyTracker>
+          <AppShell onWorkspaceReadyChange={setWorkspaceReady} />
         </CommandPaletteProvider>
       </DialogProvider>
     </ToastProvider>
   )
-}
-
-function ReadyTracker({
-  children,
-  onReady,
-}: {
-  children: React.ReactNode
-  onReady: (ready: boolean) => void
-}) {
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      const restored = await restoreWorkspace().catch(() => undefined)
-      if (!cancelled) onReady(Boolean(restored))
-    })()
-    return () => { cancelled = true }
-  }, [onReady])
-
-  return <>{children}</>
 }

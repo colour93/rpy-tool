@@ -5,9 +5,145 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>rpy-tool</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      .app-boot {
+        display: grid;
+        min-height: 100%;
+        place-items: center;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: "Avenir Next", "Aptos", "Segoe UI", "Microsoft YaHei UI",
+          sans-serif;
+      }
+
+      .app-boot__panel {
+        width: min(520px, calc(100vw - 32px));
+      }
+
+      .app-boot__brand {
+        margin: 0 0 12px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .app-boot__box {
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .app-boot__row {
+        display: grid;
+        grid-template-columns: 7rem minmax(0, 1fr);
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 12px;
+      }
+
+      .app-boot__row:last-of-type {
+        border-bottom: 0;
+      }
+
+      .app-boot__key {
+        border-right: 1px solid #e2e8f0;
+        color: #64748b;
+        font-family: "Cascadia Mono", "Consolas", monospace;
+      }
+
+      .app-boot__key,
+      .app-boot__value {
+        overflow: hidden;
+        padding: 8px 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .app-boot__track {
+        height: 4px;
+        overflow: hidden;
+        background: #f1f5f9;
+      }
+
+      .app-boot__bar {
+        height: 100%;
+        width: 33%;
+        animation: app-boot-progress 1.15s ease-in-out infinite;
+        background: #2563eb;
+      }
+
+      @keyframes app-boot-progress {
+        0% {
+          transform: translateX(-120%);
+        }
+
+        60%,
+        100% {
+          transform: translateX(320%);
+        }
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .app-boot {
+          background: #101114;
+          color: #eef0f3;
+        }
+
+        .app-boot__box {
+          border-color: #30343d;
+          background: #181a1f;
+        }
+
+        .app-boot__row,
+        .app-boot__key {
+          border-color: #30343d;
+        }
+
+        .app-boot__key {
+          color: #9da6b5;
+        }
+
+        .app-boot__track {
+          background: #23262e;
+        }
+
+        .app-boot__bar {
+          background: #60a5fa;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="app-boot" aria-busy="true" aria-live="polite">
+        <div class="app-boot__panel">
+          <p class="app-boot__brand">Ren'Py Tool</p>
+          <div class="app-boot__box">
+            <div class="app-boot__row">
+              <span class="app-boot__key">workspace</span>
+              <span class="app-boot__value">正在启动工作区</span>
+            </div>
+            <div class="app-boot__row">
+              <span class="app-boot__key">editor</span>
+              <span class="app-boot__value">加载 Monaco 本地模块</span>
+            </div>
+            <div class="app-boot__track">
+              <div class="app-boot__bar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
