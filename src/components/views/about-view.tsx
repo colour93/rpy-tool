@@ -3,12 +3,16 @@ import {
   FolderOpen,
   HelpCircle,
   Moon,
+  Rows3,
   ShieldCheck,
   Sparkles,
   Sun,
+  Type,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { ThemeMode } from '@/types'
+import { SCRIPT_FONT_SIZE_MAX, SCRIPT_FONT_SIZE_MIN } from '@/services/settings'
+import { cn } from '@/lib/cn'
+import type { EditorDensity, ThemeMode } from '@/types'
 
 const projectNotes = [
   {
@@ -33,12 +37,20 @@ export function AboutView({
   setTheme,
   motionEnabled,
   setMotionEnabled,
+  editorDensity,
+  setEditorDensity,
+  scriptFontSize,
+  setScriptFontSize,
   onOpenTourGuide,
 }: {
   theme: ThemeMode
   setTheme: (theme: ThemeMode) => void
   motionEnabled: boolean
   setMotionEnabled: (enabled: boolean) => void
+  editorDensity: EditorDensity
+  setEditorDensity: (density: EditorDensity) => void
+  scriptFontSize: number
+  setScriptFontSize: (size: number) => void
   onOpenTourGuide: () => void
 }) {
   return (
@@ -106,6 +118,56 @@ export function AboutView({
               </a>
             </p>
           </div>
+          <div className="mt-4 grid gap-3 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-40 items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <Rows3 className="h-3.5 w-3.5" />
+                阅读密度
+              </div>
+              <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+                {densityOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setEditorDensity(option.value)}
+                    className={cn(
+                      'rounded px-2.5 py-1 text-xs font-semibold transition-colors',
+                      editorDensity === option.value
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label
+                htmlFor="script-font-size"
+                className="flex min-w-40 items-center gap-2 text-xs font-semibold text-muted-foreground"
+              >
+                <Type className="h-3.5 w-3.5" />
+                脚本字号
+              </label>
+              <input
+                id="script-font-size"
+                type="range"
+                min={SCRIPT_FONT_SIZE_MIN}
+                max={SCRIPT_FONT_SIZE_MAX}
+                step={1}
+                value={scriptFontSize}
+                onChange={(event) =>
+                  setScriptFontSize(Number(event.currentTarget.value))
+                }
+                className="h-2 min-w-48 flex-1 cursor-pointer accent-info"
+                aria-label="脚本列表和修改栏字号"
+              />
+              <span className="w-12 text-right font-mono text-xs text-muted-foreground">
+                {scriptFontSize}px
+              </span>
+            </div>
+          </div>
         </section>
         <section className="rounded-lg border border-border bg-card p-5">
           <div className="flex items-center justify-between gap-3 mb-2">
@@ -135,3 +197,9 @@ export function AboutView({
     </main>
   )
 }
+
+const densityOptions: { value: EditorDensity; label: string }[] = [
+  { value: 'compact', label: '紧凑' },
+  { value: 'default', label: '默认' },
+  { value: 'comfortable', label: '宽松' },
+]

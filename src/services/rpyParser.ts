@@ -455,18 +455,25 @@ function buildAssetDiagnostics(
   referencedAssets: Map<string, RpyLine>,
 ) {
   const indexedPaths = new Set(files.map((file) => normalizePathKey(file.path)))
+  const assetFiles = files.filter(
+    (file) => file.kind === 'image' || file.kind === 'audio',
+  )
   const diagnostics: Diagnostic[] = []
 
   for (const [path, line] of referencedAssets) {
     if (!looksLikePath(path) || indexedPaths.has(normalizePathKey(path)))
       continue
+    const candidates = findAssetPathCandidates(path, assetFiles)
     diagnostics.push({
       id: `missing-asset:${line.filePath}:${line.lineNumber}`,
       severity: 'warning',
       message: `脚本引用的资源 ${path} 不在当前文件索引中`,
       filePath: line.filePath,
       lineNumber: line.lineNumber,
-      hint: '确认文件路径或将资源放入工作区',
+      hint:
+        candidates.length > 0
+          ? `脚本引用: ${path}；可能文件: ${candidates.join(' / ')}；检查目录前缀、大小写或文件名。`
+          : `脚本引用: ${path}；未找到同名候选文件，确认文件路径或将资源放入工作区。`,
       jumpTo: 'assets',
     })
   }
@@ -578,4 +585,52 @@ function inferTags(path: string) {
 
 function looksLikePath(value: string) {
   return /[/.]/.test(value) && !value.includes(' ')
+}
+
+function findAssetPathCandidates(path: string, files: FileEntry[]) {
+  const normalized = normalizePathKey(path)
+  const basename = normalized.split('/').at(-1) ?? normalized
+  const stem = basename.replace(/\.[^.]+$/, '')
+  const extension = basename.includes('.') ? basename.split('.').at(-1) : ''
+  const segments = normalized.split('/').filter(Boolean)
+
+  return files
+    .map((file) => {
+      const candidate = normalizePathKey(file.path)
+      const candidateBasename = candidate.split('/').at(-1) ?? candidate
+      const candidateStem = candidateBasename.replace(/\.[^.]+$/, '')
+      const candidateExtension = candidateBasename.includes('.')
+        ? candidateBasename.split('.').at(-1)
+        : ''
+      let score = 0
+
+      if (candidate === normalized) score += 100
+      if (candidateBasename === basename) score += 70
+      if (candidateStem === stem) score += 45
+      if (extension && candidateExtension === extension) score += 10
+      if (candidate.endsWith(`/${basename}`)) score += 25
+      if (stem.length > 2 && candidate.includes(stem)) score += 15
+      score += commonSuffixLength(segments, candidate.split('/')) * 12
+
+      return { path: file.path, score }
+    })
+    .filter((candidate) => candidate.score >= 35)
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.path.localeCompare(right.path),
+    )
+    .slice(0, 3)
+    .map((candidate) => candidate.path)
+}
+
+function commonSuffixLength(left: string[], right: string[]) {
+  let count = 0
+  while (
+    count < left.length &&
+    count < right.length &&
+    left[left.length - 1 - count] === right[right.length - 1 - count]
+  ) {
+    count += 1
+  }
+  return count
 }

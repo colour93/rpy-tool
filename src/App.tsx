@@ -43,12 +43,15 @@ import {
 } from '@/services/workspace'
 import {
   clearDraft,
+  clampScriptFontSize,
   loadCharacterOverrides,
   loadChapterOverrides,
   loadDrafts,
   loadReviewMarks,
   loadSettings,
   clampSpriteCardScale,
+  lineRowHeightForDensity,
+  normalizeEditorDensity,
   saveCharacterOverrides,
   saveChapterOverrides,
   saveDrafts,
@@ -250,6 +253,21 @@ function AppShell({
   const setMotionEnabled = useCallback((motionEnabled: boolean) => {
     setSettings((current) => ({ ...current, motionEnabled }))
   }, [])
+  const setEditorDensity = useCallback(
+    (editorDensity: UserSettings['editorDensity']) => {
+      setSettings((current) => ({
+        ...current,
+        editorDensity: normalizeEditorDensity(editorDensity),
+      }))
+    },
+    [],
+  )
+  const setScriptFontSize = useCallback((scriptFontSize: number) => {
+    setSettings((current) => ({
+      ...current,
+      scriptFontSize: clampScriptFontSize(scriptFontSize),
+    }))
+  }, [])
   const toggleTheme = useCallback(() => {
     setSettings((current) => ({
       ...current,
@@ -315,6 +333,13 @@ function AppShell({
     document.documentElement.dataset.theme = settings.theme
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
   }, [settings.theme])
+  useEffect(() => {
+    document.documentElement.dataset.density = settings.editorDensity
+    document.documentElement.style.setProperty(
+      '--script-font-size',
+      `${settings.scriptFontSize}px`,
+    )
+  }, [settings.editorDensity, settings.scriptFontSize])
   useEffect(() => {
     onWorkspaceReadyChange(Boolean(snapshot))
   }, [onWorkspaceReadyChange, snapshot])
@@ -1545,6 +1570,7 @@ function AppShell({
 
   const draftCount = Object.keys(drafts).length
   const diagnosticCount = snapshot?.index.diagnostics.length ?? 0
+  const lineRowHeight = lineRowHeightForDensity(settings.editorDensity)
   const shouldAnimate = settings.motionEnabled && !prefersReducedMotion
   const previousViewRef = useRef<ViewKey>(view)
   const [settledView, setSettledView] = useState<ViewKey>(view)
@@ -1614,6 +1640,7 @@ function AppShell({
                 isBusy={isBusy}
                 hasUnsaved={hasUnsaved}
                 unsavedCount={draftCount}
+                reviewMarks={reviewMarks}
               />
             )}
 
@@ -1659,6 +1686,7 @@ function AppShell({
                 draftCountInSelectedFile={
                   selectedFile ? draftCountForFile(selectedFile.path) : 0
                 }
+                lineRowHeight={lineRowHeight}
                 theme={settings.theme}
               />
             )}
@@ -1694,6 +1722,7 @@ function AppShell({
                 onJumpToLine={handleJumpToLine}
                 showLineOperationPanel={settings.reviewOperationPanelVisible}
                 onToggleLineOperationPanel={toggleReviewOperationPanel}
+                lineRowHeight={lineRowHeight}
               />
             )}
 
@@ -1712,6 +1741,7 @@ function AppShell({
                 drafts={drafts}
                 spriteCardScale={settings.spriteCardScale}
                 onSpriteCardScaleChange={setSpriteCardScale}
+                lineRowHeight={lineRowHeight}
               />
             )}
 
@@ -1740,6 +1770,10 @@ function AppShell({
                 setTheme={setTheme}
                 motionEnabled={settings.motionEnabled}
                 setMotionEnabled={setMotionEnabled}
+                editorDensity={settings.editorDensity}
+                setEditorDensity={setEditorDensity}
+                scriptFontSize={settings.scriptFontSize}
+                setScriptFontSize={setScriptFontSize}
                 onOpenTourGuide={openTourGuide}
               />
             )}

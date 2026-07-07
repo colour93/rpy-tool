@@ -57,6 +57,7 @@ export function SpriteView({
   drafts,
   spriteCardScale,
   onSpriteCardScaleChange,
+  lineRowHeight,
 }: {
   snapshot?: WorkspaceSnapshot
   selectedLine?: RpyLine
@@ -69,6 +70,7 @@ export function SpriteView({
   drafts: Record<string, { text: string }>
   spriteCardScale: number
   onSpriteCardScaleChange: (scale: number) => void
+  lineRowHeight: number
 }) {
   const leftSidebar = useResizableSidebar({
     key: 'rpy-tool:sidebar:sprite-left',
@@ -310,6 +312,7 @@ export function SpriteView({
             highlightDirty={(line) => lineKey(line) in drafts}
             searchMatchLineKeys={searchMatchLineKeys}
             emptyTitle="当前筛选没有可编辑行"
+            rowHeight={lineRowHeight}
           />
         </div>
         <div className="border-t border-border bg-card p-3">

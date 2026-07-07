@@ -51,6 +51,7 @@ export function VisualView({
   canSaveLine,
   dirtyByFile,
   draftCountInSelectedFile,
+  lineRowHeight,
   theme,
 }: {
   snapshot?: WorkspaceSnapshot
@@ -82,6 +83,7 @@ export function VisualView({
   canSaveLine: (line: RpyLine) => boolean
   dirtyByFile?: Set<string>
   draftCountInSelectedFile: number
+  lineRowHeight: number
   theme: 'light' | 'dark'
 }) {
   const leftSidebar = useResizableSidebar({
@@ -231,6 +233,7 @@ export function VisualView({
               searchMatchLineKeys={searchMatchLineKeys}
               emptyTitle="该文件没有可展示的剧情行"
               emptyDescription="请确认目录包含 .rpy 文件，或使用工具栏右上角重新扫描。"
+              rowHeight={lineRowHeight}
             />
           ) : (
             <div className="flex h-full flex-col overflow-hidden">

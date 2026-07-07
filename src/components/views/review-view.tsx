@@ -99,6 +99,7 @@ export function ReviewView({
   onJumpToLine,
   showLineOperationPanel,
   onToggleLineOperationPanel,
+  lineRowHeight,
 }: {
   snapshot?: WorkspaceSnapshot
   selectedLine?: RpyLine
@@ -128,6 +129,7 @@ export function ReviewView({
   onJumpToLine: (filePath: string, lineNumber: number) => void
   showLineOperationPanel: boolean
   onToggleLineOperationPanel: () => void
+  lineRowHeight: number
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const leftSidebar = useResizableSidebar({
@@ -711,6 +713,7 @@ export function ReviewView({
           emptyDescription="调整左侧筛选条件，或确认脚本中存在对白、旁白或选项行。"
           showOperationPanel={showLineOperationPanel}
           searchMatchLineKeys={searchMatchLineKeys}
+          rowHeight={lineRowHeight}
         />
       </section>
       <SidebarResizeHandle

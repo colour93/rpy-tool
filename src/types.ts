@@ -175,6 +175,8 @@ export type FileMode = 'structured' | 'source'
 
 export type ThemeMode = 'light' | 'dark'
 
+export type EditorDensity = 'compact' | 'default' | 'comfortable'
+
 export type TourGuideStepId =
   | 'intro'
   | 'open-workspace'
@@ -207,6 +209,8 @@ export interface SourceEditorState {
 
 export interface UserSettings {
   theme: ThemeMode
+  editorDensity: EditorDensity
+  scriptFontSize: number
   view: ViewKey
   assetTab: AssetTab
   spriteDefaultPosition: SpritePosition

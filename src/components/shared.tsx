@@ -76,6 +76,7 @@ export function LineList({
   files,
   speakerClassName,
   searchMatchLineKeys,
+  rowHeight = 48,
 }: {
   lines: RpyLine[]
   selectedLine?: RpyLine
@@ -94,6 +95,7 @@ export function LineList({
   files?: FileEntry[]
   speakerClassName?: string
   searchMatchLineKeys?: Set<string>
+  rowHeight?: number
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [menu, setMenu] = useState<{
@@ -106,7 +108,7 @@ export function LineList({
     () => new Map(characters.map((character) => [character.id, character])),
     [characters],
   )
-  const virtual = useVirtualWindow(lines.length, 48, 8, containerRef)
+  const virtual = useVirtualWindow(lines.length, rowHeight, 8, containerRef)
 
   useEffect(() => {
     if (!menu) return
@@ -136,13 +138,16 @@ export function LineList({
     if (!activeKey) return
     const index = lines.findIndex((line) => lineKey(line) === activeKey)
     if (index < 0 || !containerRef.current) return
-    const top = index * 48
-    const bottom = top + 48
+    const top = index * rowHeight
+    const bottom = top + rowHeight
     const { scrollTop, clientHeight } = containerRef.current
     if (top < scrollTop || bottom > scrollTop + clientHeight) {
-      containerRef.current.scrollTop = Math.max(0, top - clientHeight / 2 + 24)
+      containerRef.current.scrollTop = Math.max(
+        0,
+        top - clientHeight / 2 + rowHeight / 2,
+      )
     }
-  }, [activeKey, lines])
+  }, [activeKey, lines, rowHeight])
 
   if (lines.length === 0) {
     return <EmptyState title={emptyTitle} className={className} />
@@ -189,8 +194,9 @@ export function LineList({
                 setMenu({ x: event.clientX, y: event.clientY, line })
               }}
               style={{
-                top: (virtual.start + offset) * 48,
-                height: 48,
+                top: (virtual.start + offset) * rowHeight,
+                height: rowHeight,
+                fontSize: 'var(--script-font-size)',
               }}
               className={cn(
                 'group absolute left-0 grid w-full grid-cols-[3rem_9rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-3 text-left text-sm transition-colors',
@@ -295,6 +301,7 @@ export function ScriptLineWorkbench({
   listClassName,
   showOperationPanel = true,
   searchMatchLineKeys,
+  rowHeight,
 }: {
   lines: RpyLine[]
   selectedLine?: RpyLine
@@ -324,6 +331,7 @@ export function ScriptLineWorkbench({
   listClassName?: string
   showOperationPanel?: boolean
   searchMatchLineKeys?: Set<string>
+  rowHeight?: number
 }) {
   return (
     <div className={cn('flex h-full flex-col overflow-hidden', className)}>
@@ -349,6 +357,7 @@ export function ScriptLineWorkbench({
             emptyTitle={emptyTitle}
             className={listClassName}
             searchMatchLineKeys={searchMatchLineKeys}
+            rowHeight={rowHeight}
           />
         ) : (
           <EmptyState
@@ -538,6 +547,7 @@ export function LineOperationPanel({
               : '请选择一行'
         }
         className="min-h-16 w-full rounded-md border border-border bg-card p-2 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-70"
+        style={{ fontSize: 'var(--script-font-size)' }}
       />
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button
