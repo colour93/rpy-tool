@@ -8,11 +8,14 @@
 - 跨文件文本 Review
 - 资源分类与引用诊断（用户自定义路径规则）
 
+用户旅程视角的产品梳理见 `docs/user-journey.md`。
+
 ## 技术栈
 
 ### 已采纳
 
 - **React 19** + **TypeScript 6** + **Vite 8**
+- **Bun 1.3** — 包管理器与本地脚本入口，提交 `bun.lock`，不再使用 `pnpm-lock.yaml`
 - **Tailwind CSS 4** (`@tailwindcss/vite` 插件) — 唯一样式来源，**已删除 App.css**
 - **Light/Dark theme** — `UserSettings.theme` 持久化，根节点 `data-theme` + `dark` class 驱动 CSS token，Sonner Toast 同步跟随应用主题
 - **shadcn/ui 风格自建组件** — `Button`, `Badge`, `Input`, `Textarea`, `Separator`, `ScrollArea`
@@ -412,6 +415,12 @@ src/
 ✅ 46. 主视图 tab 切换动画改为按导航顺序横向滑动，更符合左右切换直觉
 ✅ 47. Tour Guide 跨视图步骤等待目标视图 MotionView 动画完成后再测量 anchor DOM 边界，避免动画 transform 期间读到偏移坐标
 
+## 已完成的本轮目标（2026-07-07）
+
+✅ 1. 包管理和本地脚本入口从 pnpm 迁移到 Bun，新增 `bun.lock` 并移除 `pnpm-lock.yaml`
+✅ 2. `package.json` 声明 `packageManager: bun@1.3.14`，新增 `typecheck` 脚本，部署脚本改为 `bun run build` + `bunx wrangler`
+✅ 3. 新增 `docs/user-journey.md`，从使用前准备、打开工作区、资产校准、文本 Review、就地修改、立绘查分、源码备用编辑和收尾复查梳理项目
+
 ## 命令快捷键
 
 - `Ctrl/Cmd + K`: 打开命令面板
@@ -425,10 +434,10 @@ src/
 
 ## 验证（已通过）
 
-- ✅ `pnpm exec tsc -b` 类型检查通过
-- ✅ `pnpm run lint` 通过
-- ✅ `pnpm run build` 构建通过：3392 modules；Monaco 主体、worker、语言模块与 motion 依赖均输出到 `dist/assets`
-- ✅ 本地 Vite dev server 已启动到 `http://localhost:5175/`（5173/5174 被占用后自动换端口），PowerShell `Invoke-WebRequest` 返回 200
+- ✅ `bun install` 生成 `bun.lock`，从原 `pnpm-lock.yaml` 迁移依赖解析
+- ✅ `bun run typecheck` 类型检查通过
+- ✅ `bun run lint` 通过
+- ✅ `bun run build` 构建通过：3392 modules；Monaco 主体、worker、语言模块与 motion 依赖均输出到 `dist/assets`
 - ✅ 路径别名 `@/*` 在 ts/vite 双侧生效
 - ✅ `dist` 中无 `cdn.jsdelivr.net` / `jsdelivr` / `unpkg` Monaco loader 依赖；`monaco-editor@` 命中仅为 Monaco 内部 DOM selector 文本
 - ⚠️ 本轮未完成浏览器自动视觉检查：当前 Browser 插件目录缺少其说明要求的 `scripts/browser-client.mjs`
