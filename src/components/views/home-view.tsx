@@ -1,4 +1,9 @@
-import { FolderOpen } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  ClipboardCheck,
+  FolderOpen,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { buildHealthItems, countKind, diagnosticGroup } from '@/appHelpers'
 import { cn } from '@/lib/cn'
@@ -11,6 +16,7 @@ export function HomeView({
   onOpen,
   onJumpDiagnostic,
   isBusy,
+  hasUnsaved,
   unsavedCount,
 }: {
   snapshot?: WorkspaceSnapshot
@@ -41,6 +47,76 @@ export function HomeView({
     ...grouped.warnings,
     ...grouped.info,
   ].slice(0, 16)
+  const editableCount =
+    snapshot?.index.lines.filter((line) => line.editable).length ?? 0
+  const assetDiagnostic = diagnostics.find(
+    (diagnostic) =>
+      diagnostic.jumpTo === 'assets' ||
+      `${diagnostic.message} ${diagnostic.hint ?? ''}`.includes('资源'),
+  )
+  const nextAction = !snapshot
+    ? {
+        eyebrow: '准备',
+        title: '打开一个 RenPy 工作区',
+        meta: '选择 game 目录或项目根目录后开始索引',
+        label: '打开工作区',
+        icon: FolderOpen,
+        onClick: onOpen,
+        disabled: isBusy,
+      }
+    : hasUnsaved || unsavedCount > 0
+      ? {
+          eyebrow: '继续处理',
+          title: `${unsavedCount} 行草稿等待写回`,
+          meta: '先处理未保存内容，再继续校对或查分',
+          label: '查看草稿',
+          icon: ClipboardCheck,
+          onClick: () => onNavigate('review'),
+          disabled: false,
+        }
+      : grouped.errors.length > 0
+        ? {
+            eyebrow: '需要处理',
+            title: `${grouped.errors.length} 个错误诊断`,
+            meta: grouped.errors[0]?.message ?? '先定位最高优先级诊断',
+            label: '定位诊断',
+            icon: AlertTriangle,
+            onClick: () => {
+              const diagnostic = grouped.errors[0]
+              if (diagnostic) onJumpDiagnostic(diagnostic)
+            },
+            disabled: false,
+          }
+        : assetDiagnostic
+          ? {
+              eyebrow: '校准项目',
+              title: '检查资源路径与分类规则',
+              meta: assetDiagnostic.message,
+              label: '打开资产管理',
+              icon: ArrowRight,
+              onClick: () => onNavigate('assets'),
+              disabled: false,
+            }
+          : editableCount > 0
+            ? {
+                eyebrow: '建议下一步',
+                title: '进入文本 Review 开始校对',
+                meta: `${editableCount} 行可编辑文本可进入队列`,
+                label: '进入 Review',
+                icon: ArrowRight,
+                onClick: () => onNavigate('review'),
+                disabled: false,
+              }
+            : {
+                eyebrow: '建议下一步',
+                title: '查看资产和章节索引',
+                meta: '确认项目是否被正确识别',
+                label: '打开资产管理',
+                icon: ArrowRight,
+                onClick: () => onNavigate('assets'),
+                disabled: false,
+              }
+  const NextActionIcon = nextAction.icon
 
   return (
     <main className="h-[calc(100vh-var(--shell-chrome))] overflow-auto scrollbar-thin">
@@ -98,6 +174,28 @@ export function HomeView({
                 </strong>
               </article>
             ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-border bg-secondary/50 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold uppercase text-info">
+                {nextAction.eyebrow}
+              </p>
+              <strong className="mt-0.5 block truncate text-sm">
+                {nextAction.title}
+              </strong>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {nextAction.meta}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={nextAction.onClick}
+              disabled={nextAction.disabled}
+            >
+              <NextActionIcon className="h-3.5 w-3.5" />
+              {nextAction.label}
+            </Button>
           </div>
         </section>
 

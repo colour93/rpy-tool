@@ -313,6 +313,15 @@ export function ReviewView({
   const OperationPanelIcon = showLineOperationPanel
     ? PanelBottomClose
     : PanelBottomOpen
+  const contextLines = useMemo(() => {
+    if (!snapshot || !selectedLine) return []
+    const fileLines = snapshot.index.linesByFile[selectedLine.filePath] ?? []
+    const index = fileLines.findIndex(
+      (line) => lineKey(line) === lineKey(selectedLine),
+    )
+    if (index < 0) return []
+    return fileLines.slice(Math.max(0, index - 3), index + 4)
+  }, [selectedLine, snapshot])
 
   const selectSingleLine = useCallback(
     (line: RpyLine) => {
@@ -716,6 +725,7 @@ export function ReviewView({
         status={selectedLineStatus}
         mark={selectedLine ? reviewMarks[lineKey(selectedLine)] : undefined}
         operationCount={operationLines.length}
+        contextLines={contextLines}
         diagnostics={
           selectedLine ? diagnosticsForLine(diagnostics, selectedLine) : []
         }
@@ -974,6 +984,7 @@ function ReviewInspector({
   status,
   mark,
   operationCount,
+  contextLines,
   diagnostics,
   onMark,
   onClear,
@@ -986,6 +997,7 @@ function ReviewInspector({
   status: ReviewStatus
   mark?: ReviewMark
   operationCount: number
+  contextLines: RpyLine[]
   diagnostics: Diagnostic[]
   onMark: (status: Exclude<ReviewStatus, 'unreviewed'>) => void
   onClear: () => void
@@ -993,7 +1005,10 @@ function ReviewInspector({
   onJumpToLine: (filePath: string, lineNumber: number) => void
 }) {
   return (
-    <aside className="flex h-full flex-col overflow-hidden border-l border-border bg-card" data-tour="review-inspector">
+    <aside
+      className="flex h-full flex-col overflow-hidden border-l border-border bg-card"
+      data-tour="review-inspector"
+    >
       <div className="border-b border-border p-4">
         <h2 className="text-base font-semibold">校对详情</h2>
       </div>
@@ -1058,6 +1073,8 @@ function ReviewInspector({
             </p>
           )}
         </section>
+
+        <ReviewContextPeek line={line} contextLines={contextLines} />
 
         <section className="space-y-2 border-t border-border pt-3">
           <label className="grid gap-1 text-xs">
@@ -1130,6 +1147,65 @@ function ReviewInspector({
         )}
       </div>
     </aside>
+  )
+}
+
+function ReviewContextPeek({
+  line,
+  contextLines,
+}: {
+  line?: RpyLine
+  contextLines: RpyLine[]
+}) {
+  if (!line || contextLines.length === 0) {
+    return (
+      <section className="space-y-2 border-t border-border pt-3">
+        <p className="text-xs font-bold">上下文</p>
+        <p className="rounded-md border border-border bg-secondary p-3 text-xs text-muted-foreground">
+          请选择一行校对文本。
+        </p>
+      </section>
+    )
+  }
+
+  const activeKey = lineKey(line)
+
+  return (
+    <section className="space-y-2 border-t border-border pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold">上下文</p>
+        <span className="font-mono text-[10px] text-muted-foreground">
+          ±3 行
+        </span>
+      </div>
+      <div className="overflow-hidden rounded-md border border-border bg-secondary/50">
+        {contextLines.map((contextLine) => {
+          const active = lineKey(contextLine) === activeKey
+          return (
+            <div
+              key={lineKey(contextLine)}
+              className={cn(
+                'grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 border-b border-border px-2 py-1.5 last:border-b-0',
+                active && 'bg-info/15 text-foreground',
+              )}
+            >
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {contextLine.lineNumber}
+              </span>
+              <code
+                className={cn(
+                  'min-w-0 truncate whitespace-pre font-mono text-[11px]',
+                  active ? 'text-foreground' : 'text-muted-foreground',
+                )}
+                title={contextLine.raw}
+              >
+                {contextLine.raw || ' '}
+              </code>
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

@@ -84,9 +84,7 @@ import { ReviewView } from '@/components/views/review-view'
 import { SpriteView } from '@/components/views/sprite-view'
 import { AssetsView } from '@/components/views/assets-view'
 import { AboutView } from '@/components/views/about-view'
-import {
-  TourGuide,
-} from '@/components/tour-guide'
+import { TourGuide } from '@/components/tour-guide'
 import { tourGuideSteps } from '@/services/tour-guide'
 
 const viewOrder: ViewKey[] = [
@@ -152,6 +150,39 @@ function safeFileSegment(value: string) {
       .replace(/\s+/g, '-')
       .slice(0, 80) || 'workspace'
   )
+}
+
+function workspaceFingerprint(snapshot: WorkspaceSnapshot | undefined) {
+  if (!snapshot) return undefined
+  const rpyFiles = snapshot.files
+    .filter((file) => file.kind === 'rpy')
+    .map((file) => `${file.path}:${file.size}:${file.lastModified ?? 0}`)
+    .sort()
+  const source = [
+    snapshot.name,
+    snapshot.index.lines.length,
+    snapshot.index.characters.length,
+    snapshot.index.assets.length,
+    ...rpyFiles,
+  ].join('|')
+  let hash = 5381
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 33) ^ source.charCodeAt(index)
+  }
+  return {
+    workspaceName: snapshot.name,
+    rpyFileCount: rpyFiles.length,
+    lineCount: snapshot.index.lines.length,
+    hash: (hash >>> 0).toString(16).padStart(8, '0'),
+  }
+}
+
+interface UndoableFileEdit {
+  file: WorkspaceSnapshot['files'][number]
+  filePath: string
+  beforeText: string
+  afterText: string
+  selectLineNumber?: number
 }
 
 function AppShell({
@@ -582,18 +613,74 @@ function AppShell({
     }
   }
 
+  function selectLine(line: RpyLine | undefined) {
+    setSelectedFilePath(line?.filePath)
+    setSelectedLineKey(line ? lineKey(line) : undefined)
+  }
+
   async function persistLines(
     filePath: string,
     mutate: (lines: string[]) => string[],
-  ) {
-    if (!snapshot) return
+  ): Promise<UndoableFileEdit> {
+    if (!snapshot) throw new Error('当前没有打开工作区')
     const file = snapshot.files.find((entry) => entry.path === filePath)
     if (!file) throw new Error(`文件 ${filePath} 不在当前工作区索引中`)
     const text = await readTextFile(file)
     const lines = text.split(/\r?\n/)
     const next = mutate(lines)
-    await writeTextFile(file, next.join('\n'))
-    return file
+    const nextText = next.join('\n')
+    await writeTextFile(file, nextText)
+    return {
+      file,
+      filePath,
+      beforeText: text,
+      afterText: nextText,
+    }
+  }
+
+  async function undoFileEdit(edit: UndoableFileEdit) {
+    if (!snapshot) return
+    setIsBusy(true)
+    try {
+      const currentText = await readTextFile(edit.file)
+      if (currentText !== edit.afterText) {
+        toast.warn('无法撤销', '文件已经发生新的变化，已保留当前内容')
+        return
+      }
+      await writeTextFile(edit.file, edit.beforeText)
+      const refreshed = await rescanFiles(snapshot, [edit.filePath])
+      applySnapshot(refreshed, true)
+      selectNearestLine(
+        refreshed,
+        edit.filePath,
+        edit.selectLineNumber ?? selectedLine?.lineNumber ?? 1,
+      )
+      setStatus(`已撤销 ${edit.filePath}`)
+      toast.success('已撤销写回', edit.filePath)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '撤销失败'
+      setStatus(message)
+      toast.error('撤销失败', message)
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  function toastUndoableSuccess(
+    title: string,
+    description: string,
+    edit: UndoableFileEdit,
+  ) {
+    toast.push({
+      level: 'success',
+      title,
+      description,
+      duration: 8000,
+      action: {
+        label: '撤销',
+        onTrigger: () => void undoFileEdit(edit),
+      },
+    })
   }
 
   async function handleSaveLine(line = selectedLine) {
@@ -611,7 +698,7 @@ function AppShell({
         : (line.characterId ?? null)
     setIsBusy(true)
     try {
-      await persistLines(line.filePath, (lines) => {
+      const edit = await persistLines(line.filePath, (lines) => {
         const next = [...lines]
         const nextRaw = replaceLineSpeaker(
           replaceEditableLine(line.raw, nextText),
@@ -620,13 +707,18 @@ function AppShell({
         next[line.lineNumber - 1] = nextRaw
         return next
       })
+      edit.selectLineNumber = line.lineNumber
       const refreshed = await rescanFiles(snapshot, [line.filePath])
       applySnapshot(refreshed, true)
       setDrafts((current) => clearDraft(current, targetDraftKey))
       clearReviewMarkForLine(line)
       selectNearestLine(refreshed, line.filePath, line.lineNumber)
       setStatus(`已写回 ${line.filePath}:${line.lineNumber}`)
-      toast.success('已保存', `${line.filePath}:${line.lineNumber}`)
+      toastUndoableSuccess(
+        '已保存',
+        `${line.filePath}:${line.lineNumber}`,
+        edit,
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : '写回失败'
       setStatus(message)
@@ -734,7 +826,7 @@ function AppShell({
       const inserted = makeInsertedLine(line)
       const targetLineNumber =
         position === 'before' ? line.lineNumber : line.lineNumber + 1
-      await persistLines(filePath, (lines) => {
+      const edit = await persistLines(filePath, (lines) => {
         const next = [...lines]
         const insertIndex =
           position === 'before'
@@ -743,13 +835,14 @@ function AppShell({
         next.splice(insertIndex, 0, inserted)
         return next
       })
+      edit.selectLineNumber = targetLineNumber
       const refreshed = await rescanFiles(snapshot, [filePath])
       applySnapshot(refreshed, true)
       clearDraftsForFile(filePath)
       clearReviewMarksForFile(filePath)
       selectNearestLine(refreshed, filePath, targetLineNumber)
       setStatus(`已在 ${filePath}:${targetLineNumber} 插入新行`)
-      toast.success('已插入新行', inserted.trim() || '空行')
+      toastUndoableSuccess('已插入新行', inserted.trim() || '空行', edit)
     } catch (error) {
       const message = error instanceof Error ? error.message : '插入行失败'
       setStatus(message)
@@ -880,7 +973,7 @@ function AppShell({
         indent: selectedLine.indent ?? '    ',
         variant,
       })
-      await persistLines(selectedLine.filePath, (lines) => {
+      const edit = await persistLines(selectedLine.filePath, (lines) => {
         const next = [...lines]
         const insertIndex =
           selectedLine.kind === 'label'
@@ -889,11 +982,16 @@ function AppShell({
         next.splice(insertIndex, 0, command)
         return next
       })
+      edit.selectLineNumber =
+        selectedLine.kind === 'label'
+          ? selectedLine.lineNumber + 1
+          : selectedLine.lineNumber
       const refreshed = await rescanFiles(snapshot, [selectedLine.filePath])
       applySnapshot(refreshed, true)
       clearReviewMarksForFile(selectedLine.filePath)
+      selectNearestLine(refreshed, selectedLine.filePath, edit.selectLineNumber)
       setStatus(`已插入：${command.trim()}`)
-      toast.success(`${variant} 已插入`, command.trim())
+      toastUndoableSuccess(`${variant} 已插入`, command.trim(), edit)
     } catch (error) {
       const message = error instanceof Error ? error.message : '插入失败'
       setStatus(message)
@@ -911,17 +1009,23 @@ function AppShell({
         replaceDialogueSprite(selectedLine.raw, state),
         currentDraftText,
       )
-      await persistLines(selectedLine.filePath, (lines) => {
+      const edit = await persistLines(selectedLine.filePath, (lines) => {
         const next = [...lines]
         next[selectedLine.lineNumber - 1] = nextRaw
         return next
       })
+      edit.selectLineNumber = selectedLine.lineNumber
       const refreshed = await rescanFiles(snapshot, [selectedLine.filePath])
       applySnapshot(refreshed, true)
       if (draftKey) setDrafts((current) => clearDraft(current, draftKey))
       clearReviewMarkForLine(selectedLine)
+      selectNearestLine(
+        refreshed,
+        selectedLine.filePath,
+        selectedLine.lineNumber,
+      )
       setStatus(`已套用立绘：${nextRaw.trim()}`)
-      toast.success('立绘已套用到对白', nextRaw.trim())
+      toastUndoableSuccess('立绘已套用到对白', nextRaw.trim(), edit)
     } catch (error) {
       const message = error instanceof Error ? error.message : '套用立绘失败'
       toast.error('套用失败', message)
@@ -1052,6 +1156,39 @@ function AppShell({
     }
   }
 
+  function openSelectedLineInVisual() {
+    if (selectedLine) selectLine(selectedLine)
+    setFileMode('structured')
+    setView('visual')
+  }
+
+  function openSelectedLineInReview() {
+    if (selectedLine) selectLine(selectedLine)
+    setView('review')
+  }
+
+  function openSelectedLineInSprite() {
+    if (selectedLine) selectLine(selectedLine)
+    setView('sprite')
+  }
+
+  function openSelectedLineInSource() {
+    if (selectedLine) selectLine(selectedLine)
+    setView('visual')
+    const file = snapshot?.files.find(
+      (entry) => entry.path === selectedLine?.filePath,
+    )
+    if (file) void handleLoadSource(file)
+  }
+
+  function openDraftQueue() {
+    setView('review')
+  }
+
+  function openDiagnostics() {
+    setView('home')
+  }
+
   function handleUpdateCharacter(
     id: string,
     patch: Partial<
@@ -1139,9 +1276,10 @@ function AppShell({
 
   function handleExportReviewMarks() {
     const payload = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       workspaceName: snapshot?.name,
+      workspaceFingerprint: workspaceFingerprint(snapshot),
       marks: reviewMarks,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -1165,6 +1303,31 @@ function AppShell({
       const parsed = JSON.parse(text) as unknown
       const candidate =
         isRecord(parsed) && 'marks' in parsed ? parsed.marks : parsed
+      if (
+        snapshot &&
+        isRecord(parsed) &&
+        isRecord(parsed.workspaceFingerprint)
+      ) {
+        const importedHash = parsed.workspaceFingerprint.hash
+        const currentFingerprint = workspaceFingerprint(snapshot)
+        if (
+          typeof importedHash === 'string' &&
+          currentFingerprint &&
+          importedHash !== currentFingerprint.hash
+        ) {
+          const importedName =
+            typeof parsed.workspaceFingerprint.workspaceName === 'string'
+              ? parsed.workspaceFingerprint.workspaceName
+              : '未知工作区'
+          const confirmed = await dialog.confirm({
+            title: '校对数据可能来自其他工作区',
+            description: `导出工作区：${importedName}\n当前工作区：${currentFingerprint.workspaceName}\n如果继续导入，记录会按 filePath:lineNumber 合并。`,
+            confirmLabel: '继续导入',
+            tone: 'danger',
+          })
+          if (!confirmed) return
+        }
+      }
       const imported = normalizeReviewMarks(candidate)
       if (!imported) {
         toast.error('导入失败', '文件不是有效的校对数据 JSON')
@@ -1222,7 +1385,7 @@ function AppShell({
               : target === 'review'
                 ? '文本 Review'
                 : target === 'sprite'
-                  ? '立绘库'
+                  ? '立绘快插'
                   : target === 'assets'
                     ? '资产管理'
                     : '关于'
@@ -1230,6 +1393,42 @@ function AppShell({
         group: '导航',
         run: () => setView(target),
       })),
+      {
+        id: 'context:open-visual',
+        title: '在可视化编辑器中打开当前行',
+        hint: selectedLine
+          ? `${selectedLine.filePath}:${selectedLine.lineNumber}`
+          : '当前没有选中行',
+        group: '当前行',
+        requiresWorkspace: true,
+        run: openSelectedLineInVisual,
+      },
+      {
+        id: 'context:open-review',
+        title: '在文本 Review 中打开当前行',
+        hint: selectedLine
+          ? `${selectedLine.filePath}:${selectedLine.lineNumber}`
+          : '当前没有选中行',
+        group: '当前行',
+        requiresWorkspace: true,
+        run: openSelectedLineInReview,
+      },
+      {
+        id: 'context:open-sprite',
+        title: '在立绘快插中打开当前行',
+        hint: selectedLine?.kind === 'dialogue' ? '定位当前对白' : '定位当前行',
+        group: '当前行',
+        requiresWorkspace: true,
+        run: openSelectedLineInSprite,
+      },
+      {
+        id: 'context:open-source',
+        title: '在源文件中打开当前行',
+        hint: selectedLine?.filePath ?? '当前没有选中行',
+        group: '当前行',
+        requiresWorkspace: true,
+        run: openSelectedLineInSource,
+      },
       {
         id: 'edit:save-line',
         title: '保存当前行',
@@ -1391,6 +1590,10 @@ function AppShell({
         selectedState={selectedState}
         draftCount={draftCount}
         diagnosticCount={diagnosticCount}
+        onOpenSelectedLine={openSelectedLineInVisual}
+        onOpenSelectedSprite={openSelectedLineInSprite}
+        onOpenDrafts={openDraftQueue}
+        onOpenDiagnostics={openDiagnostics}
       />
 
       <div className="relative flex-1 overflow-hidden">
@@ -1423,7 +1626,7 @@ function AppShell({
                 selectedFile={selectedFile}
                 onSelectFile={handleSelectFile}
                 selectedLine={selectedLine}
-                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                onSelectLine={selectLine}
                 selectedChapter={selectedChapter}
                 fileMode={fileMode}
                 setFileMode={setFileMode}
@@ -1440,6 +1643,7 @@ function AppShell({
                 }
                 onCopy={handleCopy}
                 onSaveLine={(line) => void handleSaveLine(line)}
+                onSaveAllDrafts={() => void handleSaveAllDrafts()}
                 onInsertLine={(position, line) =>
                   void handleInsertLine(position, line)
                 }
@@ -1452,6 +1656,9 @@ function AppShell({
                 dirty={dirty}
                 canSaveLine={isLineDirty}
                 dirtyByFile={dirtyByFile}
+                draftCountInSelectedFile={
+                  selectedFile ? draftCountForFile(selectedFile.path) : 0
+                }
                 theme={settings.theme}
               />
             )}
@@ -1460,7 +1667,7 @@ function AppShell({
               <ReviewView
                 snapshot={snapshot}
                 selectedLine={selectedLine}
-                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                onSelectLine={selectLine}
                 draftText={currentDraftText}
                 setDraftText={setDraftText}
                 setDraftSpeaker={setDraftSpeaker}
@@ -1495,7 +1702,7 @@ function AppShell({
                 snapshot={snapshot}
                 selectedLine={selectedLine}
                 selectedState={selectedState}
-                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                onSelectLine={selectLine}
                 onSelectState={setSelectedStateId}
                 onApplyState={(state) => {
                   void handleApplyDialogueSprite(state)

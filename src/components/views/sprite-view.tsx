@@ -5,7 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -552,7 +552,11 @@ function SpriteInspector({
   spriteCardScale: number
   onSpriteCardScaleChange: (scale: number) => void
 }) {
+  const [applyOnClick, setApplyOnClick] = useState(true)
   const canApply = selectedLine?.kind === 'dialogue'
+  const selectedStateInList = selectedState
+    ? states.find((state) => state.id === selectedState.id)
+    : undefined
   const safeScale = Math.min(
     SPRITE_CARD_SCALE_MAX,
     Math.max(SPRITE_CARD_SCALE_MIN, spriteCardScale),
@@ -606,6 +610,31 @@ function SpriteInspector({
             {safeScale}%
           </span>
         </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-secondary/70 px-3 py-2">
+          <label className="flex min-w-0 flex-1 items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={applyOnClick}
+              onChange={(event) => setApplyOnClick(event.currentTarget.checked)}
+              className="h-3.5 w-3.5 accent-info"
+            />
+            <span className="truncate">
+              {applyOnClick ? '点击立绘立即写回' : '点击立绘只预览'}
+            </span>
+          </label>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() =>
+              selectedStateInList && onApplyState(selectedStateInList)
+            }
+            disabled={isBusy || !canApply || !selectedStateInList}
+            title="应用当前选中的立绘"
+          >
+            <Check className="h-3.5 w-3.5" />
+            应用选中
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto scrollbar-thin p-4">
@@ -627,7 +656,13 @@ function SpriteInspector({
               <DetailRow label="角色 id" value={character.id} />
               <DetailRow
                 label="当前操作"
-                value={canApply ? '改写对白头部' : '请选择对白行'}
+                value={
+                  canApply
+                    ? applyOnClick
+                      ? '点击即改写对白头部'
+                      : '预览后手动应用'
+                    : '请选择对白行'
+                }
                 monospace={false}
               />
             </div>
@@ -641,7 +676,7 @@ function SpriteInspector({
                   disabled={isBusy || !canApply}
                   onSelect={() => {
                     onSelectState(state.id)
-                    if (canApply) onApplyState(state)
+                    if (canApply && applyOnClick) onApplyState(state)
                   }}
                   onJumpToDefinition={onJumpToDefinition}
                   files={files}

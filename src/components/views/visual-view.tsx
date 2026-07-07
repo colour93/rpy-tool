@@ -39,6 +39,7 @@ export function VisualView({
   onChangeSource,
   onCopy,
   onSaveLine,
+  onSaveAllDrafts,
   onInsertLine,
   onDeleteLine,
   draftSpeakerId,
@@ -49,6 +50,7 @@ export function VisualView({
   dirty,
   canSaveLine,
   dirtyByFile,
+  draftCountInSelectedFile,
   theme,
 }: {
   snapshot?: WorkspaceSnapshot
@@ -68,6 +70,7 @@ export function VisualView({
   onChangeSource: (content: string) => void
   onCopy: (value: string, label: string) => void
   onSaveLine: (line?: RpyLine) => void
+  onSaveAllDrafts: () => void
   onInsertLine: (position: 'before' | 'after', line?: RpyLine) => void
   onDeleteLine: (line?: RpyLine) => void
   draftSpeakerId: string | null
@@ -78,6 +81,7 @@ export function VisualView({
   dirty: boolean
   canSaveLine: (line: RpyLine) => boolean
   dirtyByFile?: Set<string>
+  draftCountInSelectedFile: number
   theme: 'light' | 'dark'
 }) {
   const leftSidebar = useResizableSidebar({
@@ -229,12 +233,39 @@ export function VisualView({
               emptyDescription="请确认目录包含 .rpy 文件，或使用工具栏右上角重新扫描。"
             />
           ) : (
-            <MonacoSourceEditor
-              value={sourceEditor.content}
-              onChange={onChangeSource}
-              filePath={sourceEditor.path ?? selectedFile?.path}
-              theme={theme}
-            />
+            <div className="flex h-full flex-col overflow-hidden">
+              {draftCountInSelectedFile > 0 && (
+                <div className="flex flex-wrap items-center gap-2 border-b border-warning/30 bg-warning/10 px-3 py-2 text-xs">
+                  <strong>{draftCountInSelectedFile} 行结构化草稿</strong>
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                    先处理同文件草稿，可以避免源文件保存后行号或内容语义错位。
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFileMode('structured')}
+                  >
+                    回到结构化
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={onSaveAllDrafts}
+                    disabled={isBusy}
+                  >
+                    提交全部
+                  </Button>
+                </div>
+              )}
+              <div className="min-h-0 flex-1">
+                <MonacoSourceEditor
+                  value={sourceEditor.content}
+                  onChange={onChangeSource}
+                  filePath={sourceEditor.path ?? selectedFile?.path}
+                  theme={theme}
+                />
+              </div>
+            </div>
           )}
         </div>
       </section>
