@@ -67,6 +67,13 @@ import {
   type AssetPathRule,
 } from '@/services/asset-rules'
 import {
+  pushNavigationHistory,
+  readNavigationHistoryState,
+  replaceNavigationHistory,
+  sameNavigationLocation,
+  type AppNavigationLocation,
+} from '@/services/navigation-history'
+import {
   chapterForLine,
   firstEditableLine,
   isSourceEditable,
@@ -184,6 +191,21 @@ function workspaceFingerprint(snapshot: WorkspaceSnapshot | undefined) {
   }
 }
 
+function lineForNavigationLocation(
+  snapshot: WorkspaceSnapshot | undefined,
+  filePath: string | undefined,
+  lineNumber: number | undefined,
+) {
+  if (!snapshot || !filePath) return undefined
+  const fileLines = snapshot.index.linesByFile[filePath] ?? []
+  return (
+    fileLines.find((line) => line.lineNumber === lineNumber) ??
+    fileLines.find((line) => lineNumber && line.lineNumber >= lineNumber) ??
+    fileLines[fileLines.length - 1] ??
+    firstEditableLine(snapshot, filePath)
+  )
+}
+
 type UndoableFileEdit = RenpyFileEdit
 
 function AppShell({
@@ -239,9 +261,7 @@ function AppShell({
   const [assetRules, setAssetRules] = useState<AssetPathRule[]>(() =>
     loadAssetRules(),
   )
-  const [reviewScopeRequest, setReviewScopeRequest] = useState<
-    { id: number; scope: ReviewQueueScope } | undefined
-  >()
+  const [reviewScope, setReviewScope] = useState<ReviewQueueScope>('all')
 
   const view = settings.view
   const assetTab = settings.assetTab
@@ -469,6 +489,90 @@ function AppShell({
     if (found) return found
     return firstEditableLine(snapshot, selectedFile?.path)
   }, [selectedFile?.path, selectedLineKey, snapshot])
+
+  const currentLocation = useMemo<AppNavigationLocation>(
+    () => ({
+      view,
+      filePath:
+        selectedLine?.filePath ?? selectedFile?.path ?? selectedFilePath,
+      lineNumber: selectedLine?.lineNumber,
+      assetTab,
+      assetId: selectedAssetId,
+      reviewScope,
+      fileMode,
+    }),
+    [
+      assetTab,
+      fileMode,
+      reviewScope,
+      selectedAssetId,
+      selectedFile?.path,
+      selectedFilePath,
+      selectedLine?.filePath,
+      selectedLine?.lineNumber,
+      view,
+    ],
+  )
+
+  const applyNavigationLocation = useCallback(
+    (location: AppNavigationLocation) => {
+      setView(location.view)
+      if (location.assetTab) setAssetTab(location.assetTab)
+      setSelectedAssetId(location.assetId)
+      if (location.reviewScope) setReviewScope(location.reviewScope)
+      if (location.fileMode) setFileMode(location.fileMode)
+      if (!location.filePath) return
+      const line = lineForNavigationLocation(
+        snapshot,
+        location.filePath,
+        location.lineNumber,
+      )
+      setSelectedFilePath(location.filePath)
+      setSelectedLineKey(line ? lineKey(line) : undefined)
+    },
+    [setAssetTab, setView, snapshot],
+  )
+
+  const navigateTo = useCallback(
+    (
+      next: Partial<AppNavigationLocation>,
+      mode: 'push' | 'replace' = 'push',
+    ) => {
+      const location: AppNavigationLocation = { ...currentLocation, ...next }
+      if (
+        mode === 'push' &&
+        !sameNavigationLocation(location, currentLocation)
+      ) {
+        pushNavigationHistory(location)
+      } else {
+        replaceNavigationHistory(location)
+      }
+      applyNavigationLocation(location)
+    },
+    [applyNavigationLocation, currentLocation],
+  )
+
+  const navigateToView = useCallback(
+    (next: ViewKey, mode: 'push' | 'replace' = 'push') => {
+      navigateTo({ view: next }, mode)
+    },
+    [navigateTo],
+  )
+
+  useEffect(() => {
+    if (isRestoring) return
+    replaceNavigationHistory(currentLocation)
+  }, [currentLocation, isRestoring])
+
+  useEffect(() => {
+    if (isRestoring) return
+    function handlePopState(event: PopStateEvent) {
+      const location = readNavigationHistoryState(event.state)
+      if (location) applyNavigationLocation(location)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [applyNavigationLocation, isRestoring])
 
   const selectedChapter = useMemo(() => {
     if (!snapshot || !selectedLine) return snapshot?.index.chapters[0]
@@ -1133,6 +1237,29 @@ function AppShell({
     }
   }
 
+  useEffect(() => {
+    if (view !== 'visual' || fileMode !== 'source' || !selectedFile) return
+    if (sourceEditor.loading || sourceEditor.path === selectedFile.path) return
+    if (
+      sourceEditor.dirty &&
+      sourceEditor.path &&
+      sourceEditor.path !== selectedFile.path
+    ) {
+      setFileMode('structured')
+      toast.warn('请先保存源文件草稿', `${sourceEditor.path} 有未保存修改`)
+      return
+    }
+    void handleLoadSource(selectedFile)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    fileMode,
+    selectedFile?.path,
+    sourceEditor.dirty,
+    sourceEditor.loading,
+    sourceEditor.path,
+    view,
+  ])
+
   async function handleCopy(value: string, label: string) {
     try {
       await navigator.clipboard.writeText(value)
@@ -1151,43 +1278,74 @@ function AppShell({
       toast.warn(`未找到 ${filePath}:${lineNumber}`)
       return
     }
-    setSelectedFilePath(filePath)
-    setSelectedLineKey(lineKey(line))
-    setView('visual')
+    navigateTo({
+      view: 'visual',
+      filePath,
+      lineNumber: line.lineNumber,
+      fileMode: 'structured',
+    })
   }
 
   function handleJumpDiagnostic(diagnostic: Diagnostic) {
     if (diagnostic.filePath && diagnostic.lineNumber) {
       handleJumpToLine(diagnostic.filePath, diagnostic.lineNumber)
     } else if (diagnostic.jumpTo) {
-      setView(diagnostic.jumpTo)
+      navigateToView(diagnostic.jumpTo)
     }
   }
 
   function openSelectedLineInVisual() {
-    if (selectedLine) selectLine(selectedLine)
-    setFileMode('structured')
-    setView('visual')
+    navigateTo({
+      view: 'visual',
+      ...(selectedLine
+        ? {
+            filePath: selectedLine.filePath,
+            lineNumber: selectedLine.lineNumber,
+          }
+        : {}),
+      fileMode: 'structured',
+    })
   }
 
   function openSelectedLineInReview() {
-    if (selectedLine) selectLine(selectedLine)
-    setView('review')
+    navigateTo({
+      view: 'review',
+      ...(selectedLine
+        ? {
+            filePath: selectedLine.filePath,
+            lineNumber: selectedLine.lineNumber,
+          }
+        : {}),
+    })
   }
 
   function openReviewScope(scope: ReviewQueueScope) {
-    setReviewScopeRequest({ id: Date.now(), scope })
-    setView('review')
+    navigateTo({ view: 'review', reviewScope: scope })
   }
 
   function openSelectedLineInSprite() {
-    if (selectedLine) selectLine(selectedLine)
-    setView('sprite')
+    navigateTo({
+      view: 'sprite',
+      ...(selectedLine
+        ? {
+            filePath: selectedLine.filePath,
+            lineNumber: selectedLine.lineNumber,
+          }
+        : {}),
+    })
   }
 
   function openSelectedLineInSource() {
-    if (selectedLine) selectLine(selectedLine)
-    setView('visual')
+    navigateTo({
+      view: 'visual',
+      ...(selectedLine
+        ? {
+            filePath: selectedLine.filePath,
+            lineNumber: selectedLine.lineNumber,
+          }
+        : {}),
+      fileMode: 'source',
+    })
     const file = snapshot?.files.find(
       (entry) => entry.path === selectedLine?.filePath,
     )
@@ -1199,7 +1357,7 @@ function AppShell({
   }
 
   function openDiagnostics() {
-    setView('home')
+    navigateToView('home')
   }
 
   function handleUpdateCharacter(
@@ -1368,7 +1526,11 @@ function AppShell({
       return
     }
     handleMarkReview(selectedLine, markStatus)
-    setView('review')
+    navigateTo({
+      view: 'review',
+      filePath: selectedLine.filePath,
+      lineNumber: selectedLine.lineNumber,
+    })
   }
 
   function clearSelectedLineReviewFromCommand() {
@@ -1377,22 +1539,30 @@ function AppShell({
       return
     }
     handleClearReviewMark(selectedLine)
-    setView('review')
+    navigateTo({
+      view: 'review',
+      filePath: selectedLine.filePath,
+      lineNumber: selectedLine.lineNumber,
+    })
   }
 
   function applySelectedSpriteFromCommand() {
     if (!selectedLine || selectedLine.kind !== 'dialogue') {
       toast.warn('请选择对白行', '立绘快插只能改写对白头部')
-      setView('sprite')
+      navigateToView('sprite')
       return
     }
     if (!selectedState) {
       toast.warn('当前没有选中立绘')
-      setView('sprite')
+      navigateToView('sprite')
       return
     }
     void handleApplyDialogueSprite(selectedState)
-    setView('sprite')
+    navigateTo({
+      view: 'sprite',
+      filePath: selectedLine.filePath,
+      lineNumber: selectedLine.lineNumber,
+    })
   }
 
   // Commands
@@ -1439,7 +1609,7 @@ function AppShell({
                     : '关于'
         }`,
         group: '导航',
-        run: () => setView(target),
+        run: () => navigateToView(target),
       })),
       {
         id: 'context:open-visual',
@@ -1597,6 +1767,8 @@ function AppShell({
       selectedLine?.raw,
       selectedLine?.kind,
       currentDraftText,
+      navigateTo,
+      navigateToView,
       selectedState?.id,
       selectedState?.imageTag,
       spritePosition,
@@ -1686,7 +1858,7 @@ function AppShell({
     <div className="flex h-screen flex-col">
       <Topbar
         view={view}
-        setView={setView}
+        setView={navigateToView}
         snapshot={snapshot}
         selectedPath={selectedFile?.path}
         isBusy={isBusy}
@@ -1728,7 +1900,7 @@ function AppShell({
               <HomeView
                 snapshot={snapshot}
                 status={status}
-                onNavigate={setView}
+                onNavigate={navigateToView}
                 onOpenReviewScope={openReviewScope}
                 onOpen={handleOpenWorkspace}
                 onJumpDiagnostic={handleJumpDiagnostic}
@@ -1818,7 +1990,8 @@ function AppShell({
                 showLineOperationPanel={settings.reviewOperationPanelVisible}
                 onToggleLineOperationPanel={toggleReviewOperationPanel}
                 lineRowHeight={lineRowHeight}
-                scopeRequest={reviewScopeRequest}
+                scope={reviewScope}
+                setScope={setReviewScope}
               />
             )}
 
@@ -1846,8 +2019,11 @@ function AppShell({
                 snapshot={snapshot}
                 assetTab={assetTab}
                 setAssetTab={(tab) => {
-                  setAssetTab(tab)
-                  setSelectedAssetId(undefined)
+                  navigateTo({
+                    view: 'assets',
+                    assetTab: tab,
+                    assetId: undefined,
+                  })
                 }}
                 selectedAssetId={selectedAssetId}
                 onSelectAsset={setSelectedAssetId}
@@ -1887,7 +2063,7 @@ function AppShell({
         motionEnabled={settings.motionEnabled}
         onOpenChange={setTourGuideOpen}
         onStepChange={setTourGuideStep}
-        onNavigate={setView}
+        onNavigate={(next) => navigateToView(next, 'replace')}
         onComplete={completeTourGuide}
         onSkip={skipTourGuide}
       />

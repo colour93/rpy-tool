@@ -18,6 +18,8 @@
     "format:check": "prettier . --check",
     "preview": "vite preview",
     "sdk:smoke": "bun run scripts/sdk/memory-smoke.ts",
+    "sdk:parser-smoke": "bun run scripts/sdk/parser-optimization-smoke.ts",
+    "sdk:file-smoke": "bun run scripts/sdk/real-file-smoke.ts",
     "deploy:pages": "bun run build && bunx wrangler@latest pages deploy dist --project-name rpy-tool"
   },
   "dependencies": {

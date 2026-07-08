@@ -102,9 +102,26 @@ console.log(await sdk.readTextFile(line.filePath))
 
 ```bash
 bun run sdk:smoke
+bun run sdk:parser-smoke
 ```
 
-脚本位置：`scripts/sdk/memory-smoke.ts`
+脚本位置：
+
+- `scripts/sdk/memory-smoke.ts`
+- `scripts/sdk/parser-optimization-smoke.ts`
+
+也可以直接用真实项目文件做 SDK 解析验证：
+
+```bash
+RPY_SDK_FILE=/path/to/game/script.rpy bun run sdk:file-smoke
+```
+
+默认会从文件路径向上推断最近的 `game` 目录作为扫描根，并读取该目录下的 `.rpy` 与图片 / 音频资源。可选环境变量：
+
+- `RPY_SDK_ROOT=/path/to/game`：显式指定扫描根
+- `RPY_SDK_SINGLE_FILE=1`：只读取 `RPY_SDK_FILE` 指向的单个文件
+
+脚本位置：`scripts/sdk/real-file-smoke.ts`
 
 ## 常用方法
 

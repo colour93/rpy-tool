@@ -4,7 +4,9 @@ export function kindFromName(name: string): FileKind {
   const extension = extensionFromName(name)
   if (extension === 'rpy') return 'rpy'
   if (
-    ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'].includes(extension)
+    ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg'].includes(
+      extension,
+    )
   ) {
     return 'image'
   }

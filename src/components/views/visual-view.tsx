@@ -93,6 +93,12 @@ export function VisualView({
     min: 200,
     edge: 'right',
   })
+  const rightSidebar = useResizableSidebar({
+    key: 'rpy-tool:sidebar:visual-context',
+    initial: 340,
+    min: 260,
+    edge: 'left',
+  })
   const visibleLines = useMemo(() => {
     const all = snapshot?.index.linesByFile[selectedFile?.path ?? ''] ?? []
     return all.filter((line) =>
@@ -131,12 +137,32 @@ export function VisualView({
     }
     return keys
   }, [characterById, normalizedQuery, visibleLines])
+  const contextLines = useMemo(() => {
+    if (!snapshot || !selectedLine) return []
+    const fileLines = snapshot.index.linesByFile[selectedLine.filePath] ?? []
+    const index = fileLines.findIndex(
+      (line) => lineKey(line) === lineKey(selectedLine),
+    )
+    if (index < 0) return []
+    return fileLines.slice(Math.max(0, index - 4), index + 5)
+  }, [selectedLine, snapshot])
+  const sourceRevealLineNumber =
+    selectedLine &&
+    selectedLine.filePath === (sourceEditor.path ?? selectedFile?.path)
+      ? selectedLine.lineNumber
+      : undefined
+  const openSourceMode = () => {
+    if (fileMode !== 'source' || sourceEditor.path !== selectedFile?.path) {
+      onLoadSource()
+    }
+    setFileMode('source')
+  }
 
   return (
     <main
       className="grid h-[calc(100vh-var(--shell-chrome))] overflow-hidden"
       style={{
-        gridTemplateColumns: `${leftSidebar.width}px 12px minmax(0,1fr)`,
+        gridTemplateColumns: `${leftSidebar.width}px 12px minmax(0,1fr) 12px ${rightSidebar.width}px`,
       }}
     >
       <FileSidebar
@@ -183,10 +209,7 @@ export function VisualView({
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (fileMode !== 'source') onLoadSource()
-                setFileMode('source')
-              }}
+              onClick={openSourceMode}
               disabled={!selectedFile}
               className={cn(
                 'rounded px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50',
@@ -266,6 +289,7 @@ export function VisualView({
                   value={sourceEditor.content}
                   onChange={onChangeSource}
                   filePath={sourceEditor.path ?? selectedFile?.path}
+                  revealLineNumber={sourceRevealLineNumber}
                   theme={theme}
                 />
               </div>
@@ -273,7 +297,123 @@ export function VisualView({
           )}
         </div>
       </section>
-      {/* VisualView 右侧立绘候选面板暂时停用，后续重新设计右侧工具栏时再恢复。 */}
+      <SidebarResizeHandle onPointerDown={rightSidebar.startResize} />
+      <VisualContextPanel
+        line={selectedLine}
+        chapter={selectedChapter}
+        contextLines={contextLines}
+        onOpenSource={openSourceMode}
+        sourceActive={fileMode === 'source'}
+      />
     </main>
+  )
+}
+
+function VisualContextPanel({
+  line,
+  chapter,
+  contextLines,
+  onOpenSource,
+  sourceActive,
+}: {
+  line?: RpyLine
+  chapter?: ChapterRegistryItem
+  contextLines: RpyLine[]
+  onOpenSource: () => void
+  sourceActive: boolean
+}) {
+  const activeKey = line ? lineKey(line) : undefined
+
+  return (
+    <aside className="flex h-full flex-col overflow-hidden border-l border-border bg-card">
+      <div className="border-b border-border p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold">上下文</h2>
+            <p className="truncate text-xs text-muted-foreground">
+              {line ? `${line.filePath}:${line.lineNumber}` : '等待选择行'}
+            </p>
+          </div>
+          <Button
+            variant={sourceActive ? 'default' : 'outline'}
+            size="sm"
+            onClick={onOpenSource}
+            disabled={!line}
+          >
+            源文件
+          </Button>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto scrollbar-thin p-4">
+        {!line || contextLines.length === 0 ? (
+          <p className="rounded-md border border-border bg-secondary p-3 text-xs text-muted-foreground">
+            从左侧列表选择一行后，这里会显示前后文。
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <section className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-bold">附近代码</p>
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  ±4 行
+                </span>
+              </div>
+              <div className="overflow-hidden rounded-md border border-border bg-secondary/50">
+                {contextLines.map((contextLine) => {
+                  const active = lineKey(contextLine) === activeKey
+                  return (
+                    <div
+                      key={lineKey(contextLine)}
+                      className={cn(
+                        'grid grid-cols-[2.75rem_minmax(0,1fr)] gap-2 border-b border-border px-2 py-1.5 last:border-b-0',
+                        active && 'bg-info/15 text-foreground',
+                      )}
+                    >
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {contextLine.lineNumber}
+                      </span>
+                      <code
+                        className={cn(
+                          'min-w-0 truncate whitespace-pre font-mono text-[11px]',
+                          active ? 'text-foreground' : 'text-muted-foreground',
+                        )}
+                        title={contextLine.raw}
+                      >
+                        {contextLine.raw || ' '}
+                      </code>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section className="space-y-2 border-t border-border pt-3 text-xs">
+              <p className="font-bold">当前行</p>
+              <div className="grid gap-1.5">
+                <VisualDetail label="章节" value={chapter?.title ?? '-'} />
+                <VisualDetail label="类型" value={line.kind} />
+                <VisualDetail label="角色" value={line.characterId ?? '旁白'} />
+                <VisualDetail
+                  label="状态"
+                  value={line.editable ? '可编辑' : '只读'}
+                />
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+function VisualDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate font-mono text-[11px]" title={value}>
+        {value}
+      </span>
+    </div>
   )
 }

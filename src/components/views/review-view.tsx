@@ -94,7 +94,8 @@ export function ReviewView({
   showLineOperationPanel,
   onToggleLineOperationPanel,
   lineRowHeight,
-  scopeRequest,
+  scope,
+  setScope,
 }: {
   snapshot?: WorkspaceSnapshot
   selectedLine?: RpyLine
@@ -125,7 +126,8 @@ export function ReviewView({
   showLineOperationPanel: boolean
   onToggleLineOperationPanel: () => void
   lineRowHeight: number
-  scopeRequest?: { id: number; scope: ReviewQueueScope }
+  scope: ReviewQueueScope
+  setScope: (scope: ReviewQueueScope) => void
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const leftSidebar = useResizableSidebar({
@@ -140,7 +142,6 @@ export function ReviewView({
     min: 280,
     edge: 'left',
   })
-  const [scope, setScope] = useState<ReviewQueueScope>('all')
   const [speakerFilter, setSpeakerFilter] = useState('all')
   const [chapterId, setChapterId] = useState('all')
   const [query, setQuery] = useState('')
@@ -330,11 +331,6 @@ export function ReviewView({
     },
     [onSelectLine],
   )
-
-  useEffect(() => {
-    if (!scopeRequest) return
-    setScope(scopeRequest.scope)
-  }, [scopeRequest])
 
   useEffect(() => {
     if (

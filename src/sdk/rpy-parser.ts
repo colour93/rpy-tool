@@ -21,6 +21,15 @@ const characterColors = [
   '#475569',
 ]
 
+interface ParseLineOptions {
+  allowEditableText?: boolean
+}
+
+interface ParseBlock {
+  indent: number
+  kind: 'story' | 'non-story'
+}
+
 export async function buildRpyIndex(
   files: FileEntry[],
   readText: (file: FileEntry) => Promise<string>,
@@ -38,6 +47,10 @@ export async function buildRpyIndex(
   const labels: RpyLine[] = []
   const assets = new Map<string, AssetRegistryItem>()
   const referencedAssets = new Map<string, RpyLine>()
+  const characterDefinitions = new Map<
+    string,
+    { id: string; displayName: string; imageTag?: string }
+  >()
 
   for (const file of rpyFiles) {
     let text: string
@@ -53,11 +66,10 @@ export async function buildRpyIndex(
       continue
     }
 
-    const parsedLines = text.split(/\r?\n/)
+    const parsedLines = parseFileLines(text, file.path)
     const fileLines: RpyLine[] = []
 
-    parsedLines.forEach((raw, index) => {
-      const line = parseLine(raw, file.path, index + 1)
+    parsedLines.forEach((line) => {
       lines.push(line)
       fileLines.push(line)
 
@@ -67,6 +79,11 @@ export async function buildRpyIndex(
 
       if (line.kind === 'define' && line.characterId) {
         const displayName = line.text ?? line.characterId
+        characterDefinitions.set(line.characterId, {
+          id: line.characterId,
+          displayName,
+          imageTag: line.target,
+        })
         upsertCharacter(characters, line.characterId, displayName)
         if (line.target) {
           imageAliases.set(line.target, line.characterId)
@@ -76,16 +93,9 @@ export async function buildRpyIndex(
       if (line.kind === 'image' && line.target) {
         imageLines.push(line)
 
-        if (line.text) {
-          const assetPath = normalizeRuntimePath(line.text)
-          const category = categoryFromPath(assetPath)
-          referencedAssets.set(assetPath, line)
-          assets.set(assetPath, {
-            id: assetPath,
-            category,
-            path: assetPath,
+        if (line.text && isManagedAssetPath(line.text)) {
+          addAssetReference(assets, referencedAssets, line.text, line, {
             tags: line.target.split(/\s+/).filter(Boolean),
-            referenced: true,
           })
         }
       }
@@ -95,25 +105,26 @@ export async function buildRpyIndex(
         line.text &&
         !line.text.startsWith('$')
       ) {
-        const assetPath = normalizeRuntimePath(line.text)
-        referencedAssets.set(assetPath, line)
-        assets.set(assetPath, {
-          id: assetPath,
+        addAssetReference(assets, referencedAssets, line.text, line, {
           category:
             line.kind === 'voice'
               ? 'voice'
               : line.target === 'sound'
                 ? 'sfx'
                 : 'bgm',
-          path: assetPath,
           tags: [line.kind],
-          referenced: true,
         })
+      }
+
+      for (const assetPath of extractStaticManagedAssetPaths(line.raw)) {
+        addAssetReference(assets, referencedAssets, assetPath, line)
       }
     })
 
     linesByFile[file.path] = fileLines
   }
+
+  inferCharacterImageAliases(imageLines, characterDefinitions, imageAliases)
 
   for (const line of imageLines) {
     const state = imageLineToState(line, imageAliases)
@@ -184,10 +195,97 @@ export async function buildRpyIndex(
   }
 }
 
-export function parseLine(raw: string, filePath: string, lineNumber: number) {
+function parseFileLines(text: string, filePath: string) {
+  const blocks: ParseBlock[] = []
+  return text.split(/\r?\n/).map((raw, index) => {
+    const trimmed = raw.trim()
+    const indent = raw.match(/^(\s*)/)?.[1].length ?? 0
+
+    if (trimmed && !trimmed.startsWith('#')) {
+      while (blocks.length > 0 && indent <= blocks[blocks.length - 1].indent) {
+        blocks.pop()
+      }
+    }
+
+    const allowEditableText =
+      blocks.some((block) => block.kind === 'non-story') === false &&
+      blocks.some((block) => block.kind === 'story')
+    const line = parseLine(raw, filePath, index + 1, { allowEditableText })
+    const blockKind = blockKindForLine(trimmed)
+    if (blockKind) blocks.push({ indent, kind: blockKind })
+    return line
+  })
+}
+
+function blockKindForLine(trimmed: string): ParseBlock['kind'] | undefined {
+  if (!trimmed || trimmed.startsWith('#') || !trimmed.endsWith(':')) {
+    return undefined
+  }
+
+  if (/^label\s+[A-Za-z_][\w.]*(?:\s*\([^)]*\))?\s*:/.test(trimmed)) {
+    return 'story'
+  }
+
+  if (/^translate\s+\w+\s+strings\s*:/.test(trimmed)) {
+    return 'non-story'
+  }
+
+  if (/^translate\s+\w+\s+[A-Za-z_][\w.]*\s*:/.test(trimmed)) {
+    return 'story'
+  }
+
+  if (/^(screen|style|transform)\b/.test(trimmed)) return 'non-story'
+  if (/^(init\b.*\bpython|init|python)\s*:/.test(trimmed)) {
+    return 'non-story'
+  }
+
+  return undefined
+}
+
+function parseImageCommand(trimmed: string, keyword: 'show' | 'scene') {
+  if (!trimmed.startsWith(`${keyword} `)) return undefined
+
+  let rest = stripTrailingCommentOutsideStrings(
+    trimmed.slice(keyword.length).trim(),
+  )
+  const withMatch = rest.match(/\s+with\s+([A-Za-z_]\w*)\s*$/)
+  const modifier = withMatch?.[1]
+  if (withMatch) rest = rest.slice(0, withMatch.index).trim()
+
+  if (keyword === 'scene') {
+    const layerOnly = rest.match(/^onlayer\s+([A-Za-z_][\w.-]*)\s*$/)
+    if (layerOnly) return { target: undefined, modifier }
+  }
+
+  const target = imageSpecifierName(rest)
+  if (!target) return undefined
+  return { target, modifier }
+}
+
+function imageSpecifierName(value: string) {
+  const tokens = splitWhitespaceOutsideStrings(value)
+  if (tokens.length === 0) return undefined
+  const stopWords = new Set(['onlayer', 'at', 'as', 'zorder', 'behind'])
+  const parts: string[] = []
+
+  for (const token of tokens) {
+    if (stopWords.has(token)) break
+    parts.push(token)
+  }
+
+  return parts.join(' ').trim() || undefined
+}
+
+export function parseLine(
+  raw: string,
+  filePath: string,
+  lineNumber: number,
+  options: ParseLineOptions = {},
+) {
   const indentMatch = raw.match(/^(\s*)/)
   const indent = indentMatch ? indentMatch[1] : ''
   const trimmed = raw.trim()
+  const allowEditableText = options.allowEditableText ?? true
   const base = {
     filePath,
     lineNumber,
@@ -204,7 +302,7 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
     return { ...base, kind: 'comment' } satisfies RpyLine
   }
 
-  const label = trimmed.match(/^label\s+([A-Za-z_][\w.]*)\s*:/)
+  const label = trimmed.match(/^label\s+([A-Za-z_][\w.]*)(?:\s*\([^)]*\))?\s*:/)
   if (label) {
     return { ...base, kind: 'label', target: label[1] } satisfies RpyLine
   }
@@ -236,7 +334,7 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
       ...base,
       kind: 'image',
       target: image[1],
-      text: unquotePath(image[2]),
+      text: firstStaticManagedAssetPath(image[2]),
     } satisfies RpyLine
   }
 
@@ -245,9 +343,9 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
     return { ...base, kind: 'menu' } satisfies RpyLine
   }
 
-  // 菜单选项："xxx":
-  const choice = trimmed.match(/^"(.+)"\s*:\s*$/)
-  if (choice) {
+  // 菜单选项："xxx": / "xxx" if condition:
+  const choice = trimmed.match(/^"(.+?)"(?:\s+if\s+.+)?\s*:\s*$/)
+  if (choice && allowEditableText) {
     return {
       ...base,
       kind: 'choice',
@@ -256,23 +354,23 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
     } satisfies RpyLine
   }
 
-  const show = trimmed.match(/^show\s+([^#]+?)(?:\s+with\s+(\w+))?\s*$/)
+  const show = parseImageCommand(trimmed, 'show')
   if (show) {
     return {
       ...base,
       kind: 'show',
-      target: show[1].trim(),
-      modifier: show[2],
+      target: show.target,
+      modifier: show.modifier,
     } satisfies RpyLine
   }
 
-  const scene = trimmed.match(/^scene\s+([^#]+?)(?:\s+with\s+(\w+))?\s*$/)
+  const scene = parseImageCommand(trimmed, 'scene')
   if (scene) {
     return {
       ...base,
       kind: 'scene',
-      target: scene[1].trim(),
-      modifier: scene[2],
+      target: scene.target,
+      modifier: scene.modifier,
     } satisfies RpyLine
   }
 
@@ -282,7 +380,7 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
       ...base,
       kind: 'play',
       target: play[1],
-      text: unquotePath(play[2]),
+      text: firstStaticManagedAssetPath(play[2]) ?? unquotePath(play[2]),
     } satisfies RpyLine
   }
 
@@ -291,7 +389,7 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
     return {
       ...base,
       kind: 'voice',
-      text: unquotePath(voice[1]),
+      text: firstStaticManagedAssetPath(voice[1]) ?? unquotePath(voice[1]),
     } satisfies RpyLine
   }
 
@@ -303,7 +401,7 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
   const dialogue = trimmed.match(
     /^([A-Za-z_]\w*)(?:\s+((?:[A-Za-z_]\w*)(?:\s+[A-Za-z_]\w*)*))?\s+(['"])(.*)\3(?:\s+with\s+(\w+))?\s*$/,
   )
-  if (dialogue) {
+  if (dialogue && allowEditableText) {
     return {
       ...base,
       kind: 'dialogue',
@@ -316,7 +414,7 @@ export function parseLine(raw: string, filePath: string, lineNumber: number) {
   }
 
   const narration = trimmed.match(/^(['"])(.*)\1(?:\s+with\s+(\w+))?\s*$/)
-  if (narration) {
+  if (narration && allowEditableText) {
     return {
       ...base,
       kind: 'narration',
@@ -496,6 +594,35 @@ function buildAssetDiagnostics(
   return diagnostics
 }
 
+function addAssetReference(
+  assets: Map<string, AssetRegistryItem>,
+  referencedAssets: Map<string, RpyLine>,
+  rawPath: string,
+  line: RpyLine,
+  options: {
+    category?: AssetRegistryItem['category']
+    tags?: string[]
+  } = {},
+) {
+  if (!isManagedAssetPath(rawPath)) return
+  const assetPath = normalizeRuntimePath(rawPath)
+  const existing = assets.get(assetPath)
+  referencedAssets.set(assetPath, line)
+  assets.set(assetPath, {
+    id: assetPath,
+    category:
+      options.category ?? existing?.category ?? categoryFromPath(assetPath),
+    path: assetPath,
+    tags: mergeTags(existing?.tags, options.tags ?? ['reference']),
+    file: existing?.file,
+    referenced: true,
+  })
+}
+
+function mergeTags(existing: string[] | undefined, incoming: string[]) {
+  return Array.from(new Set([...(existing ?? []), ...incoming].filter(Boolean)))
+}
+
 function upsertCharacter(
   characters: Map<string, CharacterRegistryItem>,
   id: string,
@@ -508,6 +635,41 @@ function upsertCharacter(
     source: 'parsed',
     states: [],
   })
+}
+
+function inferCharacterImageAliases(
+  imageLines: RpyLine[],
+  characterDefinitions: Map<
+    string,
+    { id: string; displayName: string; imageTag?: string }
+  >,
+  imageAliases: Map<string, string>,
+) {
+  const imageTags = new Set(
+    imageLines
+      .map((line) => line.target?.split(/\s+/).filter(Boolean)[0])
+      .filter((tag): tag is string => Boolean(tag)),
+  )
+
+  for (const character of characterDefinitions.values()) {
+    if (character.imageTag) continue
+    for (const candidate of characterImageTagCandidates(character.id)) {
+      if (!imageTags.has(candidate) || imageAliases.has(candidate)) continue
+      imageAliases.set(candidate, character.id)
+      break
+    }
+  }
+}
+
+function characterImageTagCandidates(characterId: string) {
+  const candidates = new Set<string>([characterId])
+  for (const suffix of ['_character', '_char', '_speaker', '_name', '_c']) {
+    if (characterId.endsWith(suffix)) {
+      candidates.add(characterId.slice(0, -suffix.length))
+    }
+  }
+  if (characterId.startsWith('c_')) candidates.add(characterId.slice(2))
+  return Array.from(candidates).filter(Boolean)
 }
 
 function imageLineToState(
@@ -549,6 +711,140 @@ function unquotePath(value: string) {
   return match ? match[2] : value.trim()
 }
 
+function firstStaticManagedAssetPath(value: string) {
+  return extractStaticManagedAssetPaths(value)[0]
+}
+
+function extractStaticManagedAssetPaths(raw: string) {
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.startsWith('#')) return []
+  const paths = extractQuotedStrings(stripTrailingCommentOutsideStrings(raw))
+    .filter(isManagedAssetPath)
+    .map((path) => normalizeRuntimePath(path))
+  return Array.from(new Set(paths))
+}
+
+function stripTrailingCommentOutsideStrings(raw: string) {
+  let quote: string | undefined
+  let escaped = false
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (char === quote) quote = undefined
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (char === '#') return raw.slice(0, index)
+  }
+  return raw
+}
+
+function extractQuotedStrings(raw: string) {
+  const values: string[] = []
+  let quote: string | undefined
+  let escaped = false
+  let buffer = ''
+
+  for (const char of raw) {
+    if (!quote) {
+      if (char === '"' || char === "'") {
+        quote = char
+        buffer = ''
+      }
+      continue
+    }
+
+    if (escaped) {
+      buffer += char
+      escaped = false
+      continue
+    }
+
+    if (char === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (char === quote) {
+      values.push(buffer)
+      quote = undefined
+      buffer = ''
+      continue
+    }
+
+    buffer += char
+  }
+
+  return values
+}
+
+function splitWhitespaceOutsideStrings(raw: string) {
+  const tokens: string[] = []
+  let quote: string | undefined
+  let escaped = false
+  let buffer = ''
+
+  for (const char of raw) {
+    if (escaped) {
+      buffer += char
+      escaped = false
+      continue
+    }
+
+    if (char === '\\') {
+      buffer += char
+      escaped = true
+      continue
+    }
+
+    if (quote) {
+      buffer += char
+      if (char === quote) quote = undefined
+      continue
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char
+      buffer += char
+      continue
+    }
+
+    if (/\s/.test(char)) {
+      if (buffer) {
+        tokens.push(buffer)
+        buffer = ''
+      }
+      continue
+    }
+
+    buffer += char
+  }
+
+  if (buffer) tokens.push(buffer)
+  return tokens
+}
+
+function isManagedAssetPath(value: string | undefined) {
+  if (!value) return false
+  const normalized = normalizeRuntimePath(value.trim())
+  if (!normalized || /^[a-z][a-z0-9+.-]*:\/\//i.test(normalized)) return false
+  if (/[[\]{}]/.test(normalized)) return false
+  return /\.(png|jpe?g|webp|gif|bmp|avif|svg|ogg|mp3|wav|flac|m4a)$/i.test(
+    normalized,
+  )
+}
+
 function escapeRenpyText(text: string, quote: string) {
   return text.replaceAll('\\', '\\\\').replaceAll(quote, `\\${quote}`)
 }
@@ -565,6 +861,14 @@ function categoryFromPath(path: string): AssetRegistryItem['category'] {
   if (normalized.includes('/bgm/') || normalized.includes('music')) return 'bgm'
   if (normalized.includes('/sfx/') || normalized.includes('sound')) return 'sfx'
   if (normalized.includes('/voice/')) return 'voice'
+  if (
+    normalized.startsWith('gui/') ||
+    normalized.includes('/gui/') ||
+    normalized.startsWith('new_gui/') ||
+    normalized.includes('/new_gui/')
+  ) {
+    return 'ui'
+  }
   if (normalized.includes('/character') || normalized.includes('/sprite')) {
     return 'character'
   }
@@ -572,7 +876,7 @@ function categoryFromPath(path: string): AssetRegistryItem['category'] {
     return 'bg'
   if (normalized.includes('/ui/')) return 'ui'
   if (normalized.includes('/fx/')) return 'fx'
-  return normalized.match(/\.(ogg|mp3|wav|flac)$/) ? 'sfx' : 'cg'
+  return normalized.match(/\.(ogg|mp3|wav|flac|m4a)$/) ? 'sfx' : 'cg'
 }
 
 function inferTags(path: string) {
