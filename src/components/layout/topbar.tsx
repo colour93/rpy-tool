@@ -104,7 +104,9 @@ export function Topbar({
             title={`命令面板 (${formatShortcut(SHORTCUTS.commandPalette)})`}
           >
             <Search className="h-3.5 w-3.5" />
-            <KeyboardHint>{formatShortcut(SHORTCUTS.commandPalette)}</KeyboardHint>
+            <KeyboardHint>
+              {formatShortcut(SHORTCUTS.commandPalette)}
+            </KeyboardHint>
           </Button>
           <Button
             variant="outline"

@@ -12,11 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/cn'
 import { tourGuideSteps } from '@/services/tour-guide'
-import type {
-  TourGuideStepId,
-  ViewKey,
-  WorkspaceSnapshot,
-} from '@/types'
+import type { TourGuideStepId, ViewKey, WorkspaceSnapshot } from '@/types'
 
 interface TourGuideProps {
   open: boolean
@@ -122,7 +118,12 @@ export function TourGuide({
       Math.abs(prev.width - rect.width) < 0.5 &&
       Math.abs(prev.height - rect.height) < 0.5
         ? prev
-        : { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+        : {
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+          },
     )
     setAnchorFound(true)
     return true
@@ -300,9 +301,7 @@ export function TourGuide({
               left: placement.left,
               transformOrigin: originBySide[placement.side],
             }}
-            initial={
-              shouldAnimate ? { opacity: 0, scale: 0.96 } : false
-            }
+            initial={shouldAnimate ? { opacity: 0, scale: 0.96 } : false}
             animate={{ opacity: 1, scale: 1 }}
             exit={shouldAnimate ? { opacity: 0, scale: 0.96 } : undefined}
             transition={{ duration: shouldAnimate ? 0.16 : 0 }}
@@ -375,7 +374,12 @@ export function TourGuide({
                 >
                   上一步
                 </Button>
-                <Button type="button" variant="default" size="sm" onClick={goNext}>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={goNext}
+                >
                   {isLast ? (
                     <>
                       {snapshot ? <Check className="h-3.5 w-3.5" /> : null}
@@ -433,8 +437,14 @@ function expandRect(rect: Rect, padding: number, viewport: Size): Rect {
   return {
     top,
     left,
-    width: Math.min(viewport.width - left - VIEWPORT_MARGIN / 2, rect.width + padding * 2),
-    height: Math.min(viewport.height - top - VIEWPORT_MARGIN / 2, rect.height + padding * 2),
+    width: Math.min(
+      viewport.width - left - VIEWPORT_MARGIN / 2,
+      rect.width + padding * 2,
+    ),
+    height: Math.min(
+      viewport.height - top - VIEWPORT_MARGIN / 2,
+      rect.height + padding * 2,
+    ),
   }
 }
 
@@ -469,23 +479,54 @@ function placeCard(
   const needHorizontal = card.width + CARD_GAP + m
 
   if (spaceBelow >= needVertical) {
-    return { top: spot.top + spot.height + CARD_GAP, left: alignedLeft, side: 'bottom' }
+    return {
+      top: spot.top + spot.height + CARD_GAP,
+      left: alignedLeft,
+      side: 'bottom',
+    }
   }
   if (spaceAbove >= needVertical) {
-    return { top: spot.top - CARD_GAP - card.height, left: alignedLeft, side: 'top' }
+    return {
+      top: spot.top - CARD_GAP - card.height,
+      left: alignedLeft,
+      side: 'top',
+    }
   }
   if (spaceRight >= needHorizontal) {
-    return { top: alignedTop, left: spot.left + spot.width + CARD_GAP, side: 'right' }
+    return {
+      top: alignedTop,
+      left: spot.left + spot.width + CARD_GAP,
+      side: 'right',
+    }
   }
   if (spaceLeft >= needHorizontal) {
-    return { top: alignedTop, left: spot.left - CARD_GAP - card.width, side: 'left' }
+    return {
+      top: alignedTop,
+      left: spot.left - CARD_GAP - card.width,
+      side: 'left',
+    }
   }
 
   // No side fits — pin to the edge with the most room.
-  const candidates: Array<{ space: number; top: number; left: number; side: Side }> = [
-    { space: spaceBelow, top: clampTop(vh - card.height - m), left: alignedLeft, side: 'bottom' },
+  const candidates: Array<{
+    space: number
+    top: number
+    left: number
+    side: Side
+  }> = [
+    {
+      space: spaceBelow,
+      top: clampTop(vh - card.height - m),
+      left: alignedLeft,
+      side: 'bottom',
+    },
     { space: spaceAbove, top: m, left: alignedLeft, side: 'top' },
-    { space: spaceRight, top: alignedTop, left: clampLeft(vw - card.width - m), side: 'right' },
+    {
+      space: spaceRight,
+      top: alignedTop,
+      left: clampLeft(vw - card.width - m),
+      side: 'right',
+    },
     { space: spaceLeft, top: alignedTop, left: m, side: 'left' },
   ]
   candidates.sort((a, b) => b.space - a.space)

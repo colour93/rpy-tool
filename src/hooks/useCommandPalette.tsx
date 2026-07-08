@@ -228,8 +228,7 @@ function CommandPalette({
           <KeyboardHint>
             {formatShortcut(SHORTCUTS.commandPaletteRun)}
           </KeyboardHint>{' '}
-          执行 ·{' '}
-          <KeyboardHint>{formatShortcut(SHORTCUTS.escape)}</KeyboardHint>{' '}
+          执行 · <KeyboardHint>{formatShortcut(SHORTCUTS.escape)}</KeyboardHint>{' '}
           关闭
         </p>
       </div>

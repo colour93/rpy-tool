@@ -35,7 +35,9 @@ export async function openWorkspace() {
   return scanWorkspace(handle)
 }
 
-export async function restoreWorkspace(options?: { requestPermission?: boolean }) {
+export async function restoreWorkspace(options?: {
+  requestPermission?: boolean
+}) {
   const handle = await idbGet<FileSystemDirectoryHandle>(
     'workspace',
     WORKSPACE_KEY,

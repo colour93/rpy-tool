@@ -11,7 +11,9 @@ export function kindFromName(name: string): FileKind {
   if (['ogg', 'mp3', 'wav', 'flac', 'm4a'].includes(extension)) return 'audio'
   if (['webm', 'mp4', 'mov'].includes(extension)) return 'video'
   if (['ttf', 'otf', 'woff', 'woff2'].includes(extension)) return 'font'
-  if (['txt', 'md', 'json', 'yml', 'yaml', 'rpyc', 'rpym'].includes(extension)) {
+  if (
+    ['txt', 'md', 'json', 'yml', 'yaml', 'rpyc', 'rpym'].includes(extension)
+  ) {
     return 'text'
   }
   return extension ? 'binary' : 'unknown'

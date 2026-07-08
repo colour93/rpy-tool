@@ -60,12 +60,14 @@ function formatShortcutPart(part: string) {
 
 function shortcutChordParts(chord: string) {
   if (chord.includes('+')) {
-    return chord.split('+').flatMap((part, index, parts) => [
-      { value: part, kind: shortcutPartKind(part) },
-      ...(index < parts.length - 1
-        ? [{ value: '+', kind: 'separator' as const }]
-        : []),
-    ])
+    return chord
+      .split('+')
+      .flatMap((part, index, parts) => [
+        { value: part, kind: shortcutPartKind(part) },
+        ...(index < parts.length - 1
+          ? [{ value: '+', kind: 'separator' as const }]
+          : []),
+      ])
   }
 
   return Array.from(chord).map((part) => ({

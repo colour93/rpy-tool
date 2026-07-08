@@ -36,7 +36,9 @@ interface RenpyFileAdapter {
   listFiles(): Promise<FileEntry[]>
   readText(path: string): Promise<string>
   writeText(path: string, content: string): Promise<void>
-  stat(path: string): Promise<{ size: number; lastModified?: number } | undefined>
+  stat(
+    path: string,
+  ): Promise<{ size: number; lastModified?: number } | undefined>
   readBlob?(path: string): Promise<Blob>
 }
 ```

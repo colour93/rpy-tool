@@ -287,7 +287,9 @@ export function SpriteView({
             title={`上一行 (${formatShortcut(SHORTCUTS.previousLine)})`}
           >
             <ChevronUp className="h-3.5 w-3.5" />
-            <KeyboardHint>{formatShortcut(SHORTCUTS.previousLine)}</KeyboardHint>
+            <KeyboardHint>
+              {formatShortcut(SHORTCUTS.previousLine)}
+            </KeyboardHint>
           </Button>
           <Button
             variant="outline"
