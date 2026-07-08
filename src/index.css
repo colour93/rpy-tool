@@ -119,6 +119,7 @@
   --topbar-height: 3.5rem; /* 56px */
   --pathbar-height: 2rem; /* 32px */
   --statusrail-height: 2rem; /* 32px */
+  --script-font-size: 14px;
   --shell-chrome: calc(
     var(--topbar-height) + var(--pathbar-height) + var(--statusrail-height)
   );
@@ -152,4 +153,8 @@
   --color-warning-foreground: #fef3c7;
   --color-info: #60a5fa;
   --color-info-foreground: #082f49;
+}
+
+:root[data-key-hints='false'] [data-key-hint] {
+  display: none;
 }

@@ -10,6 +10,9 @@ import {
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 import type { CommandDefinition } from '@/types'
+import { KeyboardHint } from '@/components/shared'
+import { useHotkeys } from '@/hooks/useHotkeys'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 
 interface CommandPaletteContextValue {
   commands: CommandDefinition[]
@@ -58,18 +61,16 @@ export function CommandPaletteProvider({
   const open = useCallback(() => setIsOpen(true), [])
   const close = useCallback(() => setIsOpen(false), [])
 
-  useEffect(() => {
-    function handleKey(event: KeyboardEvent) {
-      const isMac = navigator.platform.toLowerCase().includes('mac')
-      const ctrl = isMac ? event.metaKey : event.ctrlKey
-      if (ctrl && (event.key === 'k' || event.key === 'K')) {
-        event.preventDefault()
-        setIsOpen((current) => !current)
-      }
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [])
+  useHotkeys(
+    [
+      {
+        combo: SHORTCUTS.commandPalette,
+        handler: () => setIsOpen((current) => !current),
+        allowInInputs: true,
+      },
+    ],
+    [],
+  )
 
   const commands = useMemo(() => Object.values(registry), [registry])
 
@@ -210,29 +211,24 @@ function CommandPalette({
                   )}
                 </div>
                 {command.shortcut && (
-                  <kbd className="rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[10px]">
-                    {command.shortcut}
-                  </kbd>
+                  <KeyboardHint>{command.shortcut}</KeyboardHint>
                 )}
               </button>
             ))
           )}
         </div>
         <p className="m-0 border-t border-border bg-secondary px-3 py-2 text-[11px] text-muted-foreground">
-          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">
-            ↑
-          </kbd>
-          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">
-            ↓
-          </kbd>{' '}
+          <KeyboardHint>
+            {formatShortcut(SHORTCUTS.commandPalettePrevious)}
+          </KeyboardHint>
+          <KeyboardHint>
+            {formatShortcut(SHORTCUTS.commandPaletteNext)}
+          </KeyboardHint>{' '}
           选择 ·{' '}
-          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">
-            Enter
-          </kbd>{' '}
-          执行 ·{' '}
-          <kbd className="mx-0.5 rounded border border-border bg-card px-1 font-mono">
-            Esc
-          </kbd>{' '}
+          <KeyboardHint>
+            {formatShortcut(SHORTCUTS.commandPaletteRun)}
+          </KeyboardHint>{' '}
+          执行 · <KeyboardHint>{formatShortcut(SHORTCUTS.escape)}</KeyboardHint>{' '}
           关闭
         </p>
       </div>

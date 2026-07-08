@@ -3,12 +3,19 @@ import {
   FolderOpen,
   HelpCircle,
   Moon,
+  Rows3,
   ShieldCheck,
   Sparkles,
   Sun,
+  Keyboard,
+  Type,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { ThemeMode } from '@/types'
+import { Badge } from '@/components/ui/badge'
+import { SCRIPT_FONT_SIZE_MAX, SCRIPT_FONT_SIZE_MIN } from '@/services/settings'
+import { cn } from '@/lib/cn'
+import { APP_VERSION } from '@/services/app-version'
+import type { EditorDensity, ThemeMode } from '@/types'
 
 const projectNotes = [
   {
@@ -33,12 +40,24 @@ export function AboutView({
   setTheme,
   motionEnabled,
   setMotionEnabled,
+  showKeyboardHints,
+  setShowKeyboardHints,
+  editorDensity,
+  setEditorDensity,
+  scriptFontSize,
+  setScriptFontSize,
   onOpenTourGuide,
 }: {
   theme: ThemeMode
   setTheme: (theme: ThemeMode) => void
   motionEnabled: boolean
   setMotionEnabled: (enabled: boolean) => void
+  showKeyboardHints: boolean
+  setShowKeyboardHints: (enabled: boolean) => void
+  editorDensity: EditorDensity
+  setEditorDensity: (density: EditorDensity) => void
+  scriptFontSize: number
+  setScriptFontSize: (size: number) => void
   onOpenTourGuide: () => void
 }) {
   return (
@@ -49,7 +68,10 @@ export function AboutView({
           data-tour="about-settings"
         >
           <div className="flex items-center justify-between gap-3 mb-2">
-            <h1 className="text-xl font-semibold">关于</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold">关于</h1>
+              <Badge variant="muted">v{APP_VERSION}</Badge>
+            </div>
             <div
               className="flex flex-wrap items-center justify-end gap-2"
               data-tour="about-guide-actions"
@@ -83,6 +105,16 @@ export function AboutView({
                 动画
               </Button>
               <Button
+                variant={showKeyboardHints ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowKeyboardHints(!showKeyboardHints)}
+                aria-pressed={showKeyboardHints}
+                title="切换键位提示"
+              >
+                <Keyboard className="h-3.5 w-3.5" />
+                键位
+              </Button>
+              <Button
                 variant="outline"
                 size="sm"
                 onClick={onOpenTourGuide}
@@ -105,6 +137,56 @@ export function AboutView({
                 @colour93/rpy-tool
               </a>
             </p>
+          </div>
+          <div className="mt-4 grid gap-3 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-40 items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <Rows3 className="h-3.5 w-3.5" />
+                阅读密度
+              </div>
+              <div className="flex items-center gap-1 rounded-md bg-secondary p-1">
+                {densityOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setEditorDensity(option.value)}
+                    className={cn(
+                      'rounded px-2.5 py-1 text-xs font-semibold transition-colors',
+                      editorDensity === option.value
+                        ? 'bg-card text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label
+                htmlFor="script-font-size"
+                className="flex min-w-40 items-center gap-2 text-xs font-semibold text-muted-foreground"
+              >
+                <Type className="h-3.5 w-3.5" />
+                脚本字号
+              </label>
+              <input
+                id="script-font-size"
+                type="range"
+                min={SCRIPT_FONT_SIZE_MIN}
+                max={SCRIPT_FONT_SIZE_MAX}
+                step={1}
+                value={scriptFontSize}
+                onChange={(event) =>
+                  setScriptFontSize(Number(event.currentTarget.value))
+                }
+                className="h-2 min-w-48 flex-1 cursor-pointer accent-info"
+                aria-label="脚本列表和修改栏字号"
+              />
+              <span className="w-12 text-right font-mono text-xs text-muted-foreground">
+                {scriptFontSize}px
+              </span>
+            </div>
           </div>
         </section>
         <section className="rounded-lg border border-border bg-card p-5">
@@ -135,3 +217,9 @@ export function AboutView({
     </main>
   )
 }
+
+const densityOptions: { value: EditorDensity; label: string }[] = [
+  { value: 'compact', label: '紧凑' },
+  { value: 'default', label: '默认' },
+  { value: 'comfortable', label: '宽松' },
+]

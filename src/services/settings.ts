@@ -3,12 +3,14 @@ import type {
   ChapterOverrides,
   CharacterOverrides,
   DraftEntry,
+  EditorDensity,
   ReviewMark,
   UserSettings,
 } from '../types'
 
 const KEYS = {
   settings: 'rpy-tool:settings',
+  theme: 'rpy-tool:theme',
   drafts: 'rpy-tool:drafts',
   characterOverrides: 'rpy-tool:characters',
   chapterOverrides: 'rpy-tool:chapters',
@@ -20,6 +22,31 @@ export const SPRITE_CARD_SCALE_MIN = 70
 export const SPRITE_CARD_SCALE_MAX = 150
 export const SPRITE_CARD_SCALE_STEP = 5
 export const SPRITE_CARD_SCALE_DEFAULT = 100
+export const SCRIPT_FONT_SIZE_MIN = 12
+export const SCRIPT_FONT_SIZE_MAX = 16
+export const SCRIPT_FONT_SIZE_DEFAULT = 14
+
+export function clampScriptFontSize(value: unknown) {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return SCRIPT_FONT_SIZE_DEFAULT
+  return Math.min(
+    SCRIPT_FONT_SIZE_MAX,
+    Math.max(SCRIPT_FONT_SIZE_MIN, Math.round(numeric)),
+  )
+}
+
+export function normalizeEditorDensity(value: unknown): EditorDensity {
+  if (value === 'compact' || value === 'default' || value === 'comfortable') {
+    return value
+  }
+  return 'default'
+}
+
+export function lineRowHeightForDensity(density: EditorDensity) {
+  if (density === 'compact') return 40
+  if (density === 'comfortable') return 56
+  return 48
+}
 
 export function clampSpriteCardScale(value: unknown) {
   const numeric = typeof value === 'number' ? value : Number(value)
@@ -35,6 +62,9 @@ export function clampSpriteCardScale(value: unknown) {
 
 const defaultSettings: UserSettings = {
   theme: 'light',
+  showKeyboardHints: true,
+  editorDensity: 'default',
+  scriptFontSize: SCRIPT_FONT_SIZE_DEFAULT,
   view: 'home',
   assetTab: 'characters',
   spriteDefaultPosition: 'left',
@@ -52,12 +82,16 @@ const defaultSettings: UserSettings = {
 export function loadSettings(): UserSettings {
   try {
     const raw = localStorage.getItem(KEYS.settings)
-    if (!raw) return defaultSettings
+    const theme = loadTheme()
+    if (!raw) return { ...defaultSettings, theme }
     const parsed = JSON.parse(raw) as Partial<UserSettings>
     return {
       ...defaultSettings,
       ...parsed,
+      theme,
       spriteCardScale: clampSpriteCardScale(parsed.spriteCardScale),
+      editorDensity: normalizeEditorDensity(parsed.editorDensity),
+      scriptFontSize: clampScriptFontSize(parsed.scriptFontSize),
     }
   } catch {
     return defaultSettings
@@ -66,9 +100,23 @@ export function loadSettings(): UserSettings {
 
 export function saveSettings(settings: UserSettings) {
   try {
+    localStorage.setItem(KEYS.theme, settings.theme)
     localStorage.setItem(KEYS.settings, JSON.stringify(settings))
   } catch {
     // ignore quota errors
+  }
+}
+
+function loadTheme(): UserSettings['theme'] {
+  try {
+    const rawTheme = localStorage.getItem(KEYS.theme)
+    if (rawTheme === 'light' || rawTheme === 'dark') return rawTheme
+    const raw = localStorage.getItem(KEYS.settings)
+    if (!raw) return defaultSettings.theme
+    const parsed = JSON.parse(raw) as Partial<UserSettings>
+    return parsed.theme === 'dark' ? 'dark' : 'light'
+  } catch {
+    return defaultSettings.theme
   }
 }
 

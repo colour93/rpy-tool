@@ -28,6 +28,7 @@ import {
 } from '@/components/shared'
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { useResizableSidebar } from '@/hooks/useResizableSidebar'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 import {
   chapterForLine,
   lineKey,
@@ -40,18 +41,11 @@ import type {
   Diagnostic,
   DraftEntry,
   ReviewMark,
+  ReviewQueueScope,
   ReviewStatus,
   RpyLine,
   WorkspaceSnapshot,
 } from '@/types'
-
-type ReviewScope =
-  | 'all'
-  | 'chapter'
-  | 'dirty'
-  | 'diagnostic'
-  | 'noted'
-  | ReviewStatus
 
 const statusLabels: Record<ReviewStatus, string> = {
   unreviewed: '未校对',
@@ -99,6 +93,9 @@ export function ReviewView({
   onJumpToLine,
   showLineOperationPanel,
   onToggleLineOperationPanel,
+  lineRowHeight,
+  scope,
+  setScope,
 }: {
   snapshot?: WorkspaceSnapshot
   selectedLine?: RpyLine
@@ -128,6 +125,9 @@ export function ReviewView({
   onJumpToLine: (filePath: string, lineNumber: number) => void
   showLineOperationPanel: boolean
   onToggleLineOperationPanel: () => void
+  lineRowHeight: number
+  scope: ReviewQueueScope
+  setScope: (scope: ReviewQueueScope) => void
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const leftSidebar = useResizableSidebar({
@@ -142,7 +142,6 @@ export function ReviewView({
     min: 280,
     edge: 'left',
   })
-  const [scope, setScope] = useState<ReviewScope>('all')
   const [speakerFilter, setSpeakerFilter] = useState('all')
   const [chapterId, setChapterId] = useState('all')
   const [query, setQuery] = useState('')
@@ -313,6 +312,15 @@ export function ReviewView({
   const OperationPanelIcon = showLineOperationPanel
     ? PanelBottomClose
     : PanelBottomOpen
+  const contextLines = useMemo(() => {
+    if (!snapshot || !selectedLine) return []
+    const fileLines = snapshot.index.linesByFile[selectedLine.filePath] ?? []
+    const index = fileLines.findIndex(
+      (line) => lineKey(line) === lineKey(selectedLine),
+    )
+    if (index < 0) return []
+    return fileLines.slice(Math.max(0, index - 3), index + 4)
+  }, [selectedLine, snapshot])
 
   const selectSingleLine = useCallback(
     (line: RpyLine) => {
@@ -500,31 +508,39 @@ export function ReviewView({
 
   useHotkeys(
     [
-      { combo: 'j', handler: handleNext, disabled: filteredLines.length === 0 },
-      { combo: 'k', handler: handlePrev, disabled: filteredLines.length === 0 },
       {
-        combo: '1',
+        combo: SHORTCUTS.nextLine,
+        handler: handleNext,
+        disabled: filteredLines.length === 0,
+      },
+      {
+        combo: SHORTCUTS.previousLine,
+        handler: handlePrev,
+        disabled: filteredLines.length === 0,
+      },
+      {
+        combo: SHORTCUTS.reviewPassed,
         handler: () => handleMarkAndAdvance('approved'),
         disabled: operationLines.length === 0,
       },
       {
-        combo: '2',
+        combo: SHORTCUTS.reviewNeedsChanges,
         handler: () => handleMarkAndAdvance('needs-change'),
         disabled: operationLines.length === 0,
       },
       {
-        combo: '3',
+        combo: SHORTCUTS.reviewIgnored,
         handler: () => handleMarkAndAdvance('ignored'),
         disabled: operationLines.length === 0,
       },
       {
-        combo: '0',
+        combo: SHORTCUTS.reviewReset,
         handler: handleClearAndAdvance,
         disabled: operationLines.length === 0,
       },
-      { combo: 'mod+a', handler: handleSelectAllFilteredLines },
+      { combo: SHORTCUTS.selectAll, handler: handleSelectAllFilteredLines },
       {
-        combo: 'Escape',
+        combo: SHORTCUTS.escape,
         handler: handleCollapseSelection,
         disabled: visibleSelectedLineKeys.size <= 1 && Boolean(activeLineKey),
       },
@@ -595,22 +611,22 @@ export function ReviewView({
             size="sm"
             onClick={handleSelectAllFilteredLines}
             disabled={filteredLines.length === 0}
-            title="全选当前筛选结果 (Ctrl+A)"
+            title={`全选当前筛选结果 (${formatShortcut(SHORTCUTS.selectAll)})`}
           >
             <SquareCheckBig className="h-3.5 w-3.5" />
             全选
-            <KeyboardHint>Ctrl+A</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.selectAll)}</KeyboardHint>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={handleCollapseSelection}
             disabled={visibleSelectedLineKeys.size <= 1}
-            title="取消多选 (Esc)"
+            title={`取消多选 (${formatShortcut(SHORTCUTS.escape)})`}
           >
             <X className="h-3.5 w-3.5" />
             取消选择
-            <KeyboardHint>Esc</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.escape)}</KeyboardHint>
           </Button>
           <Button
             variant={showLineOperationPanel ? 'default' : 'outline'}
@@ -645,10 +661,12 @@ export function ReviewView({
             size="sm"
             onClick={handlePrev}
             disabled={currentIndex <= 0}
-            title="上一条校对行 (K)"
+            title={`上一条校对行 (${formatShortcut(SHORTCUTS.previousLine)})`}
           >
             <ChevronUp className="h-3.5 w-3.5" />
-            <KeyboardHint>K</KeyboardHint>
+            <KeyboardHint>
+              {formatShortcut(SHORTCUTS.previousLine)}
+            </KeyboardHint>
           </Button>
           <Button
             variant="outline"
@@ -657,10 +675,10 @@ export function ReviewView({
             disabled={
               currentIndex < 0 || currentIndex >= filteredLines.length - 1
             }
-            title="下一条校对行 (J)"
+            title={`下一条校对行 (${formatShortcut(SHORTCUTS.nextLine)})`}
           >
             <ChevronDown className="h-3.5 w-3.5" />
-            <KeyboardHint>J</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.nextLine)}</KeyboardHint>
           </Button>
           <Button
             variant="outline"
@@ -668,7 +686,8 @@ export function ReviewView({
             onClick={onSaveAllDrafts}
             disabled={totalDrafts === 0 || isBusy}
           >
-            提交全部 ({totalDrafts})<KeyboardHint>Ctrl+Shift+S</KeyboardHint>
+            提交全部 ({totalDrafts})
+            <KeyboardHint>{formatShortcut(SHORTCUTS.saveAll)}</KeyboardHint>
           </Button>
         </Toolbar>
         <ScriptLineWorkbench
@@ -702,6 +721,7 @@ export function ReviewView({
           emptyDescription="调整左侧筛选条件，或确认脚本中存在对白、旁白或选项行。"
           showOperationPanel={showLineOperationPanel}
           searchMatchLineKeys={searchMatchLineKeys}
+          rowHeight={lineRowHeight}
         />
       </section>
       <SidebarResizeHandle
@@ -716,6 +736,7 @@ export function ReviewView({
         status={selectedLineStatus}
         mark={selectedLine ? reviewMarks[lineKey(selectedLine)] : undefined}
         operationCount={operationLines.length}
+        contextLines={contextLines}
         diagnostics={
           selectedLine ? diagnosticsForLine(diagnostics, selectedLine) : []
         }
@@ -754,8 +775,8 @@ function ReviewQueueSidebar({
   searchMatchPosition,
   onNavigateSearch,
 }: {
-  scope: ReviewScope
-  setScope: (scope: ReviewScope) => void
+  scope: ReviewQueueScope
+  setScope: (scope: ReviewQueueScope) => void
   query: string
   setQuery: (query: string) => void
   speakerFilter: string
@@ -778,7 +799,7 @@ function ReviewQueueSidebar({
   onNavigateSearch: (delta: 1 | -1) => void
 }) {
   const items: {
-    key: ReviewScope
+    key: ReviewQueueScope
     label: string
     count: number
     icon: React.ReactNode
@@ -974,6 +995,7 @@ function ReviewInspector({
   status,
   mark,
   operationCount,
+  contextLines,
   diagnostics,
   onMark,
   onClear,
@@ -986,6 +1008,7 @@ function ReviewInspector({
   status: ReviewStatus
   mark?: ReviewMark
   operationCount: number
+  contextLines: RpyLine[]
   diagnostics: Diagnostic[]
   onMark: (status: Exclude<ReviewStatus, 'unreviewed'>) => void
   onClear: () => void
@@ -993,7 +1016,10 @@ function ReviewInspector({
   onJumpToLine: (filePath: string, lineNumber: number) => void
 }) {
   return (
-    <aside className="flex h-full flex-col overflow-hidden border-l border-border bg-card" data-tour="review-inspector">
+    <aside
+      className="flex h-full flex-col overflow-hidden border-l border-border bg-card"
+      data-tour="review-inspector"
+    >
       <div className="border-b border-border p-4">
         <h2 className="text-base font-semibold">校对详情</h2>
       </div>
@@ -1019,7 +1045,9 @@ function ReviewInspector({
             >
               <Check className="h-3.5 w-3.5" />
               通过
-              <KeyboardHint>1</KeyboardHint>
+              <KeyboardHint>
+                {formatShortcut(SHORTCUTS.reviewPassed)}
+              </KeyboardHint>
             </Button>
             <Button
               variant={status === 'needs-change' ? 'default' : 'outline'}
@@ -1029,7 +1057,9 @@ function ReviewInspector({
             >
               <MessageSquareWarning className="h-3.5 w-3.5" />
               需修改
-              <KeyboardHint>2</KeyboardHint>
+              <KeyboardHint>
+                {formatShortcut(SHORTCUTS.reviewNeedsChanges)}
+              </KeyboardHint>
             </Button>
             <Button
               variant={status === 'ignored' ? 'default' : 'outline'}
@@ -1039,7 +1069,9 @@ function ReviewInspector({
             >
               <EyeOff className="h-3.5 w-3.5" />
               忽略
-              <KeyboardHint>3</KeyboardHint>
+              <KeyboardHint>
+                {formatShortcut(SHORTCUTS.reviewIgnored)}
+              </KeyboardHint>
             </Button>
             <Button
               variant="outline"
@@ -1049,7 +1081,9 @@ function ReviewInspector({
             >
               <Circle className="h-3.5 w-3.5" />
               重置
-              <KeyboardHint>0</KeyboardHint>
+              <KeyboardHint>
+                {formatShortcut(SHORTCUTS.reviewReset)}
+              </KeyboardHint>
             </Button>
           </div>
           {mark && (
@@ -1058,6 +1092,8 @@ function ReviewInspector({
             </p>
           )}
         </section>
+
+        <ReviewContextPeek line={line} contextLines={contextLines} />
 
         <section className="space-y-2 border-t border-border pt-3">
           <label className="grid gap-1 text-xs">
@@ -1133,7 +1169,66 @@ function ReviewInspector({
   )
 }
 
-function scopeLabel(scope: ReviewScope) {
+function ReviewContextPeek({
+  line,
+  contextLines,
+}: {
+  line?: RpyLine
+  contextLines: RpyLine[]
+}) {
+  if (!line || contextLines.length === 0) {
+    return (
+      <section className="space-y-2 border-t border-border pt-3">
+        <p className="text-xs font-bold">上下文</p>
+        <p className="rounded-md border border-border bg-secondary p-3 text-xs text-muted-foreground">
+          请选择一行校对文本。
+        </p>
+      </section>
+    )
+  }
+
+  const activeKey = lineKey(line)
+
+  return (
+    <section className="space-y-2 border-t border-border pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold">上下文</p>
+        <span className="font-mono text-[10px] text-muted-foreground">
+          ±3 行
+        </span>
+      </div>
+      <div className="overflow-hidden rounded-md border border-border bg-secondary/50">
+        {contextLines.map((contextLine) => {
+          const active = lineKey(contextLine) === activeKey
+          return (
+            <div
+              key={lineKey(contextLine)}
+              className={cn(
+                'grid grid-cols-[2.5rem_minmax(0,1fr)] gap-2 border-b border-border px-2 py-1.5 last:border-b-0',
+                active && 'bg-info/15 text-foreground',
+              )}
+            >
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {contextLine.lineNumber}
+              </span>
+              <code
+                className={cn(
+                  'min-w-0 truncate whitespace-pre font-mono text-[11px]',
+                  active ? 'text-foreground' : 'text-muted-foreground',
+                )}
+                title={contextLine.raw}
+              >
+                {contextLine.raw || ' '}
+              </code>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function scopeLabel(scope: ReviewQueueScope) {
   if (scope === 'all') return '全部校对行'
   if (scope === 'chapter') return '当前章节'
   if (scope === 'dirty') return '有草稿'

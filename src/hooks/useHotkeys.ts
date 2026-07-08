@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useHotkeys as useReactHotkeys } from 'react-hotkeys-hook'
+import type { DependencyList } from 'react'
 
 interface Hotkey {
   combo: string // 例如 "mod+s", "mod+shift+s"
@@ -41,9 +42,13 @@ function isInputTarget(event: KeyboardEvent) {
 /**
  * 注册一组键盘快捷键
  */
-export function useHotkeys(hotkeys: Hotkey[], deps: React.DependencyList = []) {
-  useEffect(() => {
-    function handle(event: KeyboardEvent) {
+export function useHotkeys(hotkeys: Hotkey[], deps: DependencyList = []) {
+  const combos = hotkeys.map((hotkey) => hotkey.combo)
+  const enableOnFormTags = hotkeys.some((hotkey) => hotkey.allowInInputs)
+
+  useReactHotkeys(
+    combos,
+    (event) => {
       for (const hotkey of hotkeys) {
         if (hotkey.disabled) continue
         if (!matches(hotkey.combo, event)) continue
@@ -52,9 +57,12 @@ export function useHotkeys(hotkeys: Hotkey[], deps: React.DependencyList = []) {
         hotkey.handler(event)
         return
       }
-    }
-    window.addEventListener('keydown', handle)
-    return () => window.removeEventListener('keydown', handle)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+    },
+    {
+      enabled: hotkeys.length > 0,
+      enableOnFormTags,
+      enableOnContentEditable: enableOnFormTags,
+    },
+    deps,
+  )
 }

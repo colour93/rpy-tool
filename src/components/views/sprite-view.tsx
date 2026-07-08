@@ -5,7 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -25,6 +25,7 @@ import {
   Toolbar,
 } from '@/components/shared'
 import { useResizableSidebar } from '@/hooks/useResizableSidebar'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 import {
   chapterForLine,
   lineKey,
@@ -57,6 +58,7 @@ export function SpriteView({
   drafts,
   spriteCardScale,
   onSpriteCardScaleChange,
+  lineRowHeight,
 }: {
   snapshot?: WorkspaceSnapshot
   selectedLine?: RpyLine
@@ -69,6 +71,7 @@ export function SpriteView({
   drafts: Record<string, { text: string }>
   spriteCardScale: number
   onSpriteCardScaleChange: (scale: number) => void
+  lineRowHeight: number
 }) {
   const leftSidebar = useResizableSidebar({
     key: 'rpy-tool:sidebar:sprite-left',
@@ -281,10 +284,12 @@ export function SpriteView({
             size="sm"
             onClick={handlePrev}
             disabled={currentIndex <= 0}
-            title="上一行 (K)"
+            title={`上一行 (${formatShortcut(SHORTCUTS.previousLine)})`}
           >
             <ChevronUp className="h-3.5 w-3.5" />
-            <KeyboardHint>K</KeyboardHint>
+            <KeyboardHint>
+              {formatShortcut(SHORTCUTS.previousLine)}
+            </KeyboardHint>
           </Button>
           <Button
             variant="outline"
@@ -293,10 +298,10 @@ export function SpriteView({
             disabled={
               currentIndex < 0 || currentIndex >= filteredLines.length - 1
             }
-            title="下一行 (J)"
+            title={`下一行 (${formatShortcut(SHORTCUTS.nextLine)})`}
           >
             <ChevronDown className="h-3.5 w-3.5" />
-            <KeyboardHint>J</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.nextLine)}</KeyboardHint>
           </Button>
         </Toolbar>
         <div className="min-h-0 flex-1">
@@ -310,6 +315,7 @@ export function SpriteView({
             highlightDirty={(line) => lineKey(line) in drafts}
             searchMatchLineKeys={searchMatchLineKeys}
             emptyTitle="当前筛选没有可编辑行"
+            rowHeight={lineRowHeight}
           />
         </div>
         <div className="border-t border-border bg-card p-3">
@@ -552,7 +558,11 @@ function SpriteInspector({
   spriteCardScale: number
   onSpriteCardScaleChange: (scale: number) => void
 }) {
+  const [applyOnClick, setApplyOnClick] = useState(true)
   const canApply = selectedLine?.kind === 'dialogue'
+  const selectedStateInList = selectedState
+    ? states.find((state) => state.id === selectedState.id)
+    : undefined
   const safeScale = Math.min(
     SPRITE_CARD_SCALE_MAX,
     Math.max(SPRITE_CARD_SCALE_MIN, spriteCardScale),
@@ -606,6 +616,31 @@ function SpriteInspector({
             {safeScale}%
           </span>
         </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-secondary/70 px-3 py-2">
+          <label className="flex min-w-0 flex-1 items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={applyOnClick}
+              onChange={(event) => setApplyOnClick(event.currentTarget.checked)}
+              className="h-3.5 w-3.5 accent-info"
+            />
+            <span className="truncate">
+              {applyOnClick ? '点击立绘立即写回' : '点击立绘只预览'}
+            </span>
+          </label>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() =>
+              selectedStateInList && onApplyState(selectedStateInList)
+            }
+            disabled={isBusy || !canApply || !selectedStateInList}
+            title="应用当前选中的立绘"
+          >
+            <Check className="h-3.5 w-3.5" />
+            应用选中
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto scrollbar-thin p-4">
@@ -627,7 +662,13 @@ function SpriteInspector({
               <DetailRow label="角色 id" value={character.id} />
               <DetailRow
                 label="当前操作"
-                value={canApply ? '改写对白头部' : '请选择对白行'}
+                value={
+                  canApply
+                    ? applyOnClick
+                      ? '点击即改写对白头部'
+                      : '预览后手动应用'
+                    : '请选择对白行'
+                }
                 monospace={false}
               />
             </div>
@@ -641,7 +682,7 @@ function SpriteInspector({
                   disabled={isBusy || !canApply}
                   onSelect={() => {
                     onSelectState(state.id)
-                    if (canApply) onApplyState(state)
+                    if (canApply && applyOnClick) onApplyState(state)
                   }}
                   onJumpToDefinition={onJumpToDefinition}
                   files={files}

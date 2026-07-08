@@ -13,6 +13,7 @@ export interface MonacoSourceEditorProps {
   readOnly?: boolean
   className?: string
   filePath?: string
+  revealLineNumber?: number
 }
 
 export function MonacoSourceEditor({
@@ -23,6 +24,7 @@ export function MonacoSourceEditor({
   readOnly = false,
   className,
   filePath,
+  revealLineNumber,
 }: MonacoSourceEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -110,6 +112,18 @@ export function MonacoSourceEditor({
   useEffect(() => {
     monaco.editor.setTheme(theme === 'dark' ? 'vs-dark' : 'vs')
   }, [theme])
+
+  useEffect(() => {
+    const editor = editorRef.current
+    const model = editor?.getModel()
+    if (!editor || !model || !revealLineNumber) return
+    const lineNumber = Math.min(
+      Math.max(1, revealLineNumber),
+      model.getLineCount(),
+    )
+    editor.setPosition({ lineNumber, column: 1 })
+    editor.revealLineInCenter(lineNumber, monaco.editor.ScrollType.Smooth)
+  }, [modelUri, ready, revealLineNumber])
 
   return (
     <div

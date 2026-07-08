@@ -30,7 +30,13 @@ import {
   lineMatchesQuery,
 } from '@/appHelpers'
 import { getImagePreviewUrl } from '@/services/thumbnails'
+import { readBlob } from '@/services/workspace'
 import { normalizePathKey } from '@/services/path-utils'
+import {
+  formatShortcut,
+  shortcutDisplayParts,
+  SHORTCUTS,
+} from '@/lib/shortcuts'
 import type {
   CharacterState,
   CharacterRegistryItem,
@@ -76,6 +82,7 @@ export function LineList({
   files,
   speakerClassName,
   searchMatchLineKeys,
+  rowHeight = 48,
 }: {
   lines: RpyLine[]
   selectedLine?: RpyLine
@@ -94,6 +101,7 @@ export function LineList({
   files?: FileEntry[]
   speakerClassName?: string
   searchMatchLineKeys?: Set<string>
+  rowHeight?: number
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [menu, setMenu] = useState<{
@@ -106,7 +114,7 @@ export function LineList({
     () => new Map(characters.map((character) => [character.id, character])),
     [characters],
   )
-  const virtual = useVirtualWindow(lines.length, 48, 8, containerRef)
+  const virtual = useVirtualWindow(lines.length, rowHeight, 8, containerRef)
 
   useEffect(() => {
     if (!menu) return
@@ -136,13 +144,16 @@ export function LineList({
     if (!activeKey) return
     const index = lines.findIndex((line) => lineKey(line) === activeKey)
     if (index < 0 || !containerRef.current) return
-    const top = index * 48
-    const bottom = top + 48
+    const top = index * rowHeight
+    const bottom = top + rowHeight
     const { scrollTop, clientHeight } = containerRef.current
     if (top < scrollTop || bottom > scrollTop + clientHeight) {
-      containerRef.current.scrollTop = Math.max(0, top - clientHeight / 2 + 24)
+      containerRef.current.scrollTop = Math.max(
+        0,
+        top - clientHeight / 2 + rowHeight / 2,
+      )
     }
-  }, [activeKey, lines])
+  }, [activeKey, lines, rowHeight])
 
   if (lines.length === 0) {
     return <EmptyState title={emptyTitle} className={className} />
@@ -189,8 +200,9 @@ export function LineList({
                 setMenu({ x: event.clientX, y: event.clientY, line })
               }}
               style={{
-                top: (virtual.start + offset) * 48,
-                height: 48,
+                top: (virtual.start + offset) * rowHeight,
+                height: rowHeight,
+                fontSize: 'var(--script-font-size)',
               }}
               className={cn(
                 'group absolute left-0 grid w-full grid-cols-[3rem_9rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-3 text-left text-sm transition-colors',
@@ -295,6 +307,7 @@ export function ScriptLineWorkbench({
   listClassName,
   showOperationPanel = true,
   searchMatchLineKeys,
+  rowHeight,
 }: {
   lines: RpyLine[]
   selectedLine?: RpyLine
@@ -324,6 +337,7 @@ export function ScriptLineWorkbench({
   listClassName?: string
   showOperationPanel?: boolean
   searchMatchLineKeys?: Set<string>
+  rowHeight?: number
 }) {
   return (
     <div className={cn('flex h-full flex-col overflow-hidden', className)}>
@@ -349,6 +363,7 @@ export function ScriptLineWorkbench({
             emptyTitle={emptyTitle}
             className={listClassName}
             searchMatchLineKeys={searchMatchLineKeys}
+            rowHeight={rowHeight}
           />
         ) : (
           <EmptyState
@@ -411,7 +426,7 @@ function LineRowMenu({
     >
       <ContextMenuButton
         label="保存行"
-        shortcut="Ctrl+S"
+        shortcut={formatShortcut(SHORTCUTS.save)}
         disabled={!canSave}
         onClick={() => onRun(() => actions.onSaveLine?.(line), canSave)}
       />
@@ -532,12 +547,13 @@ export function LineOperationPanel({
         disabled={!canEditText || isBusy}
         placeholder={
           line?.editable
-            ? '编辑后按 Ctrl+S 保存'
+            ? `编辑后按 ${formatShortcut(SHORTCUTS.save)} 保存`
             : line
               ? '当前行只能插入或删除'
               : '请选择一行'
         }
         className="min-h-16 w-full rounded-md border border-border bg-card p-2 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-70"
+        style={{ fontSize: 'var(--script-font-size)' }}
       />
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button
@@ -545,11 +561,11 @@ export function LineOperationPanel({
           size="sm"
           onClick={onSaveLine}
           disabled={!canSave}
-          title="保存当前行 (Ctrl+S)"
+          title={`保存当前行 (${formatShortcut(SHORTCUTS.save)})`}
         >
           <Save className="h-3.5 w-3.5" />
           保存行
-          <KeyboardHint>Ctrl+S</KeyboardHint>
+          <KeyboardHint>{formatShortcut(SHORTCUTS.save)}</KeyboardHint>
         </Button>
         <Button
           variant="outline"
@@ -623,9 +639,29 @@ export function OriginalLineCode({
 }
 
 export function KeyboardHint({ children }: { children: React.ReactNode }) {
+  const parts =
+    typeof children === 'string' ? shortcutDisplayParts(children) : undefined
+
   return (
-    <kbd className="rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
-      {children}
+    <kbd
+      data-key-hint
+      className="inline-flex min-h-5 items-center gap-0.5 rounded border border-border bg-secondary px-1.5 py-0.5 align-middle text-[10px] font-semibold leading-none text-muted-foreground"
+    >
+      {parts
+        ? parts.map((part, index) => (
+            <span
+              key={`${part.value}-${index}`}
+              className={cn(
+                part.kind === 'modifier'
+                  ? 'font-sans text-[13px] leading-none'
+                  : 'font-mono',
+                part.kind === 'separator' && 'font-mono opacity-70',
+              )}
+            >
+              {part.value}
+            </span>
+          ))
+        : children}
     </kbd>
   )
 }
@@ -655,7 +691,10 @@ function ContextMenuButton({
     >
       <span>{label}</span>
       {shortcut && (
-        <span className="font-mono text-[10px] text-muted-foreground">
+        <span
+          data-key-hint
+          className="font-mono text-[10px] text-muted-foreground"
+        >
           {shortcut}
         </span>
       )}
@@ -1021,8 +1060,7 @@ export function AudioPreview({ file }: { file: FileEntry }) {
 
   useEffect(() => {
     let active = true
-    file.handle
-      .getFile()
+    readBlob(file)
       .then((blob) => {
         const next = URL.createObjectURL(blob)
         if (active) setUrl(next)

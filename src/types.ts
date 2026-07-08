@@ -25,7 +25,6 @@ export interface FileEntry {
   extension: string
   size: number
   lastModified?: number
-  handle: FileSystemFileHandle
 }
 
 export type RpyLineKind =
@@ -175,6 +174,8 @@ export type FileMode = 'structured' | 'source'
 
 export type ThemeMode = 'light' | 'dark'
 
+export type EditorDensity = 'compact' | 'default' | 'comfortable'
+
 export type TourGuideStepId =
   | 'intro'
   | 'open-workspace'
@@ -207,6 +208,9 @@ export interface SourceEditorState {
 
 export interface UserSettings {
   theme: ThemeMode
+  showKeyboardHints: boolean
+  editorDensity: EditorDensity
+  scriptFontSize: number
   view: ViewKey
   assetTab: AssetTab
   spriteDefaultPosition: SpritePosition
@@ -258,6 +262,14 @@ export type ReviewStatus =
   | 'approved'
   | 'needs-change'
   | 'ignored'
+
+export type ReviewQueueScope =
+  | 'all'
+  | 'chapter'
+  | 'dirty'
+  | 'diagnostic'
+  | 'noted'
+  | ReviewStatus
 
 export interface ReviewMark {
   /** lineKey = filePath:lineNumber */

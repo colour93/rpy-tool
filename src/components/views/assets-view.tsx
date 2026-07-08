@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Copy, FolderTree, Plus, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -123,6 +123,12 @@ export function AssetsView({
   const [filter, setFilter] = useState<AssetFilterCategory>('all')
   const [query, setQuery] = useState('')
   const [rulesOpen, setRulesOpen] = useState(false)
+
+  useEffect(() => {
+    setSection(assetTab)
+    setFilter('all')
+    setQuery('')
+  }, [assetTab])
 
   const rows = useMemo(() => {
     if (!snapshot) return []

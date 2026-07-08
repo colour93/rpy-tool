@@ -17,6 +17,7 @@ import type {
   DraftEntry,
   FileMode,
   ReviewMark,
+  ReviewQueueScope,
   ReviewStatus,
   RpyLine,
   SourceEditorState,
@@ -28,27 +29,32 @@ import type {
   WorkspaceSnapshot,
 } from '@/types'
 import {
-  buildShowCommand,
-  replaceLineSpeaker,
-  replaceDialogueSprite,
-  replaceEditableLine,
-} from '@/services/rpyParser'
-import {
   forgetWorkspace,
+  forgetWorkspaceHistoryEntry,
+  getWorkspaceSdk,
+  loadWorkspaceHistory,
   openWorkspace,
   readTextFile,
   rescanFiles,
   restoreWorkspace,
+  restoreWorkspaceHandle,
+  statFile,
+  undoFileEdit as undoWorkspaceFileEdit,
   writeTextFile,
+  type WorkspaceHistoryEntry,
 } from '@/services/workspace'
+import type { RenpyFileEdit } from '@/sdk/file-adapter'
 import {
   clearDraft,
+  clampScriptFontSize,
   loadCharacterOverrides,
   loadChapterOverrides,
   loadDrafts,
   loadReviewMarks,
   loadSettings,
   clampSpriteCardScale,
+  lineRowHeightForDensity,
+  normalizeEditorDensity,
   saveCharacterOverrides,
   saveChapterOverrides,
   saveDrafts,
@@ -60,6 +66,13 @@ import {
   saveAssetRules,
   type AssetPathRule,
 } from '@/services/asset-rules'
+import {
+  pushNavigationHistory,
+  readNavigationHistoryState,
+  replaceNavigationHistory,
+  sameNavigationLocation,
+  type AppNavigationLocation,
+} from '@/services/navigation-history'
 import {
   chapterForLine,
   firstEditableLine,
@@ -84,10 +97,9 @@ import { ReviewView } from '@/components/views/review-view'
 import { SpriteView } from '@/components/views/sprite-view'
 import { AssetsView } from '@/components/views/assets-view'
 import { AboutView } from '@/components/views/about-view'
-import {
-  TourGuide,
-} from '@/components/tour-guide'
+import { TourGuide } from '@/components/tour-guide'
 import { tourGuideSteps } from '@/services/tour-guide'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 
 const viewOrder: ViewKey[] = [
   'home',
@@ -154,6 +166,48 @@ function safeFileSegment(value: string) {
   )
 }
 
+function workspaceFingerprint(snapshot: WorkspaceSnapshot | undefined) {
+  if (!snapshot) return undefined
+  const rpyFiles = snapshot.files
+    .filter((file) => file.kind === 'rpy')
+    .map((file) => `${file.path}:${file.size}:${file.lastModified ?? 0}`)
+    .sort()
+  const source = [
+    snapshot.name,
+    snapshot.index.lines.length,
+    snapshot.index.characters.length,
+    snapshot.index.assets.length,
+    ...rpyFiles,
+  ].join('|')
+  let hash = 5381
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 33) ^ source.charCodeAt(index)
+  }
+  return {
+    workspaceName: snapshot.name,
+    rpyFileCount: rpyFiles.length,
+    lineCount: snapshot.index.lines.length,
+    hash: (hash >>> 0).toString(16).padStart(8, '0'),
+  }
+}
+
+function lineForNavigationLocation(
+  snapshot: WorkspaceSnapshot | undefined,
+  filePath: string | undefined,
+  lineNumber: number | undefined,
+) {
+  if (!snapshot || !filePath) return undefined
+  const fileLines = snapshot.index.linesByFile[filePath] ?? []
+  return (
+    fileLines.find((line) => line.lineNumber === lineNumber) ??
+    fileLines.find((line) => lineNumber && line.lineNumber >= lineNumber) ??
+    fileLines[fileLines.length - 1] ??
+    firstEditableLine(snapshot, filePath)
+  )
+}
+
+type UndoableFileEdit = RenpyFileEdit
+
 function AppShell({
   onWorkspaceReadyChange,
 }: {
@@ -169,6 +223,9 @@ function AppShell({
     () => !settings.tourGuideCompleted,
   )
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | undefined>()
+  const [workspaceHistory, setWorkspaceHistory] = useState<
+    WorkspaceHistoryEntry[]
+  >([])
   const [status, setStatus] = useState('准备打开 RenPy 工作区')
   const [isBusy, setIsBusy] = useState(false)
   const [isRestoring, setIsRestoring] = useState(true)
@@ -204,6 +261,7 @@ function AppShell({
   const [assetRules, setAssetRules] = useState<AssetPathRule[]>(() =>
     loadAssetRules(),
   )
+  const [reviewScope, setReviewScope] = useState<ReviewQueueScope>('all')
 
   const view = settings.view
   const assetTab = settings.assetTab
@@ -218,6 +276,24 @@ function AppShell({
   }, [])
   const setMotionEnabled = useCallback((motionEnabled: boolean) => {
     setSettings((current) => ({ ...current, motionEnabled }))
+  }, [])
+  const setShowKeyboardHints = useCallback((showKeyboardHints: boolean) => {
+    setSettings((current) => ({ ...current, showKeyboardHints }))
+  }, [])
+  const setEditorDensity = useCallback(
+    (editorDensity: UserSettings['editorDensity']) => {
+      setSettings((current) => ({
+        ...current,
+        editorDensity: normalizeEditorDensity(editorDensity),
+      }))
+    },
+    [],
+  )
+  const setScriptFontSize = useCallback((scriptFontSize: number) => {
+    setSettings((current) => ({
+      ...current,
+      scriptFontSize: clampScriptFontSize(scriptFontSize),
+    }))
   }, [])
   const toggleTheme = useCallback(() => {
     setSettings((current) => ({
@@ -285,6 +361,18 @@ function AppShell({
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
   }, [settings.theme])
   useEffect(() => {
+    document.documentElement.dataset.keyHints = String(
+      settings.showKeyboardHints,
+    )
+  }, [settings.showKeyboardHints])
+  useEffect(() => {
+    document.documentElement.dataset.density = settings.editorDensity
+    document.documentElement.style.setProperty(
+      '--script-font-size',
+      `${settings.scriptFontSize}px`,
+    )
+  }, [settings.editorDensity, settings.scriptFontSize])
+  useEffect(() => {
     onWorkspaceReadyChange(Boolean(snapshot))
   }, [onWorkspaceReadyChange, snapshot])
 
@@ -292,8 +380,18 @@ function AppShell({
   useEffect(() => {
     let cancelled = false
     setIsBusy(true)
-    restoreWorkspace()
-      .then((restored) => {
+    Promise.all([loadWorkspaceHistory(), restoreWorkspace()])
+      .then(([history, restored]) => {
+        if (cancelled) return
+        setWorkspaceHistory(history)
+        if (!restored) {
+          setStatus(
+            history.length
+              ? '请选择最近工作区恢复访问'
+              : '准备打开 RenPy 工作区',
+          )
+          return
+        }
         if (!restored || cancelled) return
         const reclassified = {
           ...restored,
@@ -317,7 +415,7 @@ function AppShell({
         const message =
           error instanceof Error ? error.message : '恢复工作区失败'
         setStatus(message)
-        toast.error('恢复工作区失败', message)
+        toast.error('读取工作区历史失败', message)
       })
       .finally(() => {
         if (!cancelled) {
@@ -391,6 +489,90 @@ function AppShell({
     if (found) return found
     return firstEditableLine(snapshot, selectedFile?.path)
   }, [selectedFile?.path, selectedLineKey, snapshot])
+
+  const currentLocation = useMemo<AppNavigationLocation>(
+    () => ({
+      view,
+      filePath:
+        selectedLine?.filePath ?? selectedFile?.path ?? selectedFilePath,
+      lineNumber: selectedLine?.lineNumber,
+      assetTab,
+      assetId: selectedAssetId,
+      reviewScope,
+      fileMode,
+    }),
+    [
+      assetTab,
+      fileMode,
+      reviewScope,
+      selectedAssetId,
+      selectedFile?.path,
+      selectedFilePath,
+      selectedLine?.filePath,
+      selectedLine?.lineNumber,
+      view,
+    ],
+  )
+
+  const applyNavigationLocation = useCallback(
+    (location: AppNavigationLocation) => {
+      setView(location.view)
+      if (location.assetTab) setAssetTab(location.assetTab)
+      setSelectedAssetId(location.assetId)
+      if (location.reviewScope) setReviewScope(location.reviewScope)
+      if (location.fileMode) setFileMode(location.fileMode)
+      if (!location.filePath) return
+      const line = lineForNavigationLocation(
+        snapshot,
+        location.filePath,
+        location.lineNumber,
+      )
+      setSelectedFilePath(location.filePath)
+      setSelectedLineKey(line ? lineKey(line) : undefined)
+    },
+    [setAssetTab, setView, snapshot],
+  )
+
+  const navigateTo = useCallback(
+    (
+      next: Partial<AppNavigationLocation>,
+      mode: 'push' | 'replace' = 'push',
+    ) => {
+      const location: AppNavigationLocation = { ...currentLocation, ...next }
+      if (
+        mode === 'push' &&
+        !sameNavigationLocation(location, currentLocation)
+      ) {
+        pushNavigationHistory(location)
+      } else {
+        replaceNavigationHistory(location)
+      }
+      applyNavigationLocation(location)
+    },
+    [applyNavigationLocation, currentLocation],
+  )
+
+  const navigateToView = useCallback(
+    (next: ViewKey, mode: 'push' | 'replace' = 'push') => {
+      navigateTo({ view: next }, mode)
+    },
+    [navigateTo],
+  )
+
+  useEffect(() => {
+    if (isRestoring) return
+    replaceNavigationHistory(currentLocation)
+  }, [currentLocation, isRestoring])
+
+  useEffect(() => {
+    if (isRestoring) return
+    function handlePopState(event: PopStateEvent) {
+      const location = readNavigationHistoryState(event.state)
+      if (location) applyNavigationLocation(location)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [applyNavigationLocation, isRestoring])
 
   const selectedChapter = useMemo(() => {
     if (!snapshot || !selectedLine) return snapshot?.index.chapters[0]
@@ -515,6 +697,7 @@ function AppShell({
     try {
       const next = await openWorkspace()
       applySnapshot(next, false)
+      setWorkspaceHistory(await loadWorkspaceHistory())
       setDrafts({})
       setSourceEditor({ content: '', dirty: false, loading: false })
       setStatus(
@@ -536,7 +719,7 @@ function AppShell({
     setIsBusy(true)
     setStatus('正在重新扫描工作区…')
     try {
-      const restored = await restoreWorkspace()
+      const restored = await restoreWorkspace({ requestPermission: true })
       if (restored) {
         applySnapshot(restored, true)
         setStatus(`重新索引完成：${restored.files.length} 个文件`)
@@ -572,6 +755,48 @@ function AppShell({
     toast.info('已关闭工作区')
   }
 
+  async function handleOpenRecentWorkspace(entry: WorkspaceHistoryEntry) {
+    if (hasUnsaved) {
+      const confirmed = await dialog.confirm({
+        title: '当前有未保存改动',
+        description: '切换工作区会清除当前会话状态。',
+        confirmLabel: '继续切换',
+        tone: 'danger',
+      })
+      if (!confirmed) return
+    }
+    setIsBusy(true)
+    setStatus(`正在恢复 ${entry.name}…`)
+    try {
+      const restored = await restoreWorkspaceHandle(entry.handle, {
+        requestPermission: true,
+      })
+      if (!restored) {
+        setStatus('没有获得工作区权限')
+        toast.warn('未恢复工作区', '浏览器没有授予目录访问权限')
+        return
+      }
+      applySnapshot(restored, false)
+      setDrafts({})
+      setSourceEditor({ content: '', dirty: false, loading: false })
+      setWorkspaceHistory(await loadWorkspaceHistory())
+      setStatus(`已恢复工作区 ${restored.name}`)
+      toast.success('工作区已恢复', restored.name)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '恢复工作区失败'
+      setStatus(message)
+      toast.error('恢复工作区失败', message)
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  async function handleForgetRecentWorkspace(entry: WorkspaceHistoryEntry) {
+    await forgetWorkspaceHistoryEntry(entry.id)
+    setWorkspaceHistory(await loadWorkspaceHistory())
+    toast.info('已移除最近工作区', entry.name)
+  }
+
   function handleSelectFile(path: string, line?: RpyLine) {
     setSelectedFilePath(path)
     const nextLine = line ?? firstEditableLine(snapshot, path)
@@ -582,18 +807,52 @@ function AppShell({
     }
   }
 
-  async function persistLines(
-    filePath: string,
-    mutate: (lines: string[]) => string[],
-  ) {
+  function selectLine(line: RpyLine | undefined) {
+    setSelectedFilePath(line?.filePath)
+    setSelectedLineKey(line ? lineKey(line) : undefined)
+  }
+
+  async function undoFileEdit(edit: UndoableFileEdit) {
     if (!snapshot) return
-    const file = snapshot.files.find((entry) => entry.path === filePath)
-    if (!file) throw new Error(`文件 ${filePath} 不在当前工作区索引中`)
-    const text = await readTextFile(file)
-    const lines = text.split(/\r?\n/)
-    const next = mutate(lines)
-    await writeTextFile(file, next.join('\n'))
-    return file
+    setIsBusy(true)
+    try {
+      const result = await undoWorkspaceFileEdit(snapshot, edit)
+      if (result.status === 'conflict' || !result.snapshot) {
+        toast.warn('无法撤销', '文件已经发生新的变化，已保留当前内容')
+        return
+      }
+      applySnapshot(result.snapshot, true)
+      selectNearestLine(
+        result.snapshot,
+        edit.filePath,
+        edit.selectLineNumber ?? selectedLine?.lineNumber ?? 1,
+      )
+      setStatus(`已撤销 ${edit.filePath}`)
+      toast.success('已撤销写回', edit.filePath)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '撤销失败'
+      setStatus(message)
+      toast.error('撤销失败', message)
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  function toastUndoableSuccess(
+    title: string,
+    description: string,
+    edit: UndoableFileEdit,
+  ) {
+    toast.push({
+      level: 'success',
+      title,
+      description,
+      duration: 8000,
+      action: {
+        label: '撤销',
+        onTrigger: () => void undoFileEdit(edit),
+      },
+    })
   }
 
   async function handleSaveLine(line = selectedLine) {
@@ -611,22 +870,21 @@ function AppShell({
         : (line.characterId ?? null)
     setIsBusy(true)
     try {
-      await persistLines(line.filePath, (lines) => {
-        const next = [...lines]
-        const nextRaw = replaceLineSpeaker(
-          replaceEditableLine(line.raw, nextText),
-          nextSpeakerId,
-        )
-        next[line.lineNumber - 1] = nextRaw
-        return next
-      })
-      const refreshed = await rescanFiles(snapshot, [line.filePath])
+      const { edit, snapshot: refreshed } =
+        await getWorkspaceSdk().saveEditableLine(snapshot, line, {
+          text: nextText,
+          speakerId: nextSpeakerId,
+        })
       applySnapshot(refreshed, true)
       setDrafts((current) => clearDraft(current, targetDraftKey))
       clearReviewMarkForLine(line)
       selectNearestLine(refreshed, line.filePath, line.lineNumber)
       setStatus(`已写回 ${line.filePath}:${line.lineNumber}`)
-      toast.success('已保存', `${line.filePath}:${line.lineNumber}`)
+      toastUndoableSuccess(
+        '已保存',
+        `${line.filePath}:${line.lineNumber}`,
+        edit,
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : '写回失败'
       setStatus(message)
@@ -693,16 +951,6 @@ function AppShell({
     setSelectedLineKey(line ? lineKey(line) : undefined)
   }
 
-  function makeInsertedLine(anchor: RpyLine) {
-    const indent = anchor.indent ?? ''
-    if (anchor.kind === 'choice') return `${indent}"":`
-    if (anchor.characterId) {
-      const head = [anchor.characterId, anchor.target].filter(Boolean).join(' ')
-      return `${indent}${head} ""`
-    }
-    return `${indent}""`
-  }
-
   async function confirmLineNumberShift(actionLabel: string, filePath: string) {
     const count = draftCountForFile(filePath)
     if (count === 0) return true
@@ -731,25 +979,18 @@ function AppShell({
     if (!confirmed) return
     setIsBusy(true)
     try {
-      const inserted = makeInsertedLine(line)
-      const targetLineNumber =
-        position === 'before' ? line.lineNumber : line.lineNumber + 1
-      await persistLines(filePath, (lines) => {
-        const next = [...lines]
-        const insertIndex =
-          position === 'before'
-            ? Math.max(0, line.lineNumber - 1)
-            : Math.min(next.length, line.lineNumber)
-        next.splice(insertIndex, 0, inserted)
-        return next
-      })
-      const refreshed = await rescanFiles(snapshot, [filePath])
+      const {
+        edit,
+        snapshot: refreshed,
+        inserted,
+      } = await getWorkspaceSdk().insertEditableLine(snapshot, line, position)
+      const targetLineNumber = edit.selectLineNumber ?? line.lineNumber
       applySnapshot(refreshed, true)
       clearDraftsForFile(filePath)
       clearReviewMarksForFile(filePath)
       selectNearestLine(refreshed, filePath, targetLineNumber)
       setStatus(`已在 ${filePath}:${targetLineNumber} 插入新行`)
-      toast.success('已插入新行', inserted.trim() || '空行')
+      toastUndoableSuccess('已插入新行', inserted.trim() || '空行', edit)
     } catch (error) {
       const message = error instanceof Error ? error.message : '插入行失败'
       setStatus(message)
@@ -780,12 +1021,10 @@ function AppShell({
     if (!confirmed) return
     setIsBusy(true)
     try {
-      await persistLines(filePath, (lines) => {
-        const next = [...lines]
-        next.splice(line.lineNumber - 1, 1)
-        return next
-      })
-      const refreshed = await rescanFiles(snapshot, [filePath])
+      const { snapshot: refreshed } = await getWorkspaceSdk().deleteLine(
+        snapshot,
+        line,
+      )
       applySnapshot(refreshed, true)
       clearDraftsForFile(filePath)
       clearReviewMarksForFile(filePath)
@@ -811,34 +1050,8 @@ function AppShell({
     if (!confirmed) return
     setIsBusy(true)
     try {
-      const byFile = new Map<string, DraftEntry[]>()
-      for (const draft of Object.values(drafts)) {
-        const [path] = draft.lineKey.split(':')
-        const list = byFile.get(path) ?? []
-        list.push(draft)
-        byFile.set(path, list)
-      }
-      const touchedFiles: string[] = []
-      for (const [path, list] of byFile) {
-        await persistLines(path, (lines) => {
-          const next = [...lines]
-          for (const draft of list) {
-            const [, lineStr] = draft.lineKey.split(':')
-            const lineNumber = Number(lineStr)
-            const original = next[lineNumber - 1]
-            if (typeof original === 'string') {
-              const textChanged = replaceEditableLine(original, draft.text)
-              next[lineNumber - 1] =
-                'speakerId' in draft
-                  ? replaceLineSpeaker(textChanged, draft.speakerId ?? null)
-                  : textChanged
-            }
-          }
-          return next
-        })
-        touchedFiles.push(path)
-      }
-      const refreshed = await rescanFiles(snapshot, touchedFiles)
+      const { snapshot: refreshed, touchedFiles } =
+        await getWorkspaceSdk().saveDrafts(snapshot, Object.values(drafts))
       applySnapshot(refreshed, true)
       setReviewMarks((current) => {
         const next = { ...current }
@@ -873,27 +1086,25 @@ function AppShell({
     if (!snapshot || !selectedLine || !state) return
     setIsBusy(true)
     try {
-      const command = buildShowCommand({
-        imageTag: state.imageTag,
+      const {
+        edit,
+        snapshot: refreshed,
+        command,
+      } = await getWorkspaceSdk().insertShowCommand(snapshot, selectedLine, {
+        state,
         position: spritePosition,
         transition: spriteTransition || undefined,
-        indent: selectedLine.indent ?? '    ',
         variant,
       })
-      await persistLines(selectedLine.filePath, (lines) => {
-        const next = [...lines]
-        const insertIndex =
-          selectedLine.kind === 'label'
-            ? selectedLine.lineNumber
-            : Math.max(0, selectedLine.lineNumber - 1)
-        next.splice(insertIndex, 0, command)
-        return next
-      })
-      const refreshed = await rescanFiles(snapshot, [selectedLine.filePath])
       applySnapshot(refreshed, true)
       clearReviewMarksForFile(selectedLine.filePath)
+      selectNearestLine(
+        refreshed,
+        selectedLine.filePath,
+        edit.selectLineNumber ?? selectedLine.lineNumber,
+      )
       setStatus(`已插入：${command.trim()}`)
-      toast.success(`${variant} 已插入`, command.trim())
+      toastUndoableSuccess(`${variant} 已插入`, command.trim(), edit)
     } catch (error) {
       const message = error instanceof Error ? error.message : '插入失败'
       setStatus(message)
@@ -907,21 +1118,24 @@ function AppShell({
     if (!snapshot || !selectedLine || selectedLine.kind !== 'dialogue') return
     setIsBusy(true)
     try {
-      const nextRaw = replaceEditableLine(
-        replaceDialogueSprite(selectedLine.raw, state),
-        currentDraftText,
-      )
-      await persistLines(selectedLine.filePath, (lines) => {
-        const next = [...lines]
-        next[selectedLine.lineNumber - 1] = nextRaw
-        return next
+      const {
+        edit,
+        snapshot: refreshed,
+        raw: nextRaw,
+      } = await getWorkspaceSdk().applyDialogueSprite(snapshot, selectedLine, {
+        state,
+        text: currentDraftText,
       })
-      const refreshed = await rescanFiles(snapshot, [selectedLine.filePath])
       applySnapshot(refreshed, true)
       if (draftKey) setDrafts((current) => clearDraft(current, draftKey))
       clearReviewMarkForLine(selectedLine)
+      selectNearestLine(
+        refreshed,
+        selectedLine.filePath,
+        selectedLine.lineNumber,
+      )
       setStatus(`已套用立绘：${nextRaw.trim()}`)
-      toast.success('立绘已套用到对白', nextRaw.trim())
+      toastUndoableSuccess('立绘已套用到对白', nextRaw.trim(), edit)
     } catch (error) {
       const message = error instanceof Error ? error.message : '套用立绘失败'
       toast.error('套用失败', message)
@@ -956,15 +1170,17 @@ function AppShell({
       message: '读取中…',
     }))
     try {
-      const blob = await file.handle.getFile()
-      const content = await blob.text()
+      const [content, stat] = await Promise.all([
+        readTextFile(file),
+        statFile(file),
+      ])
       setSourceEditor({
         path: file.path,
         content,
         dirty: false,
         loading: false,
-        lastModified: blob.lastModified,
-        size: blob.size,
+        lastModified: stat?.lastModified,
+        size: stat?.size,
         message: `已载入 ${file.path}`,
       })
       setStatus(`已打开源文件 ${file.path}`)
@@ -983,10 +1199,10 @@ function AppShell({
     if (!file) return
     setIsBusy(true)
     try {
-      const latest = await file.handle.getFile()
+      const latest = await statFile(file)
       const externallyChanged =
-        latest.lastModified !== sourceEditor.lastModified ||
-        latest.size !== sourceEditor.size
+        latest?.lastModified !== sourceEditor.lastModified ||
+        latest?.size !== sourceEditor.size
       if (externallyChanged) {
         const confirmed = await dialog.confirm({
           title: '文件已被外部修改',
@@ -1000,15 +1216,15 @@ function AppShell({
         }
       }
       await writeTextFile(file, sourceEditor.content)
-      const saved = await file.handle.getFile()
+      const saved = await statFile(file)
       const refreshed = await rescanFiles(snapshot, [file.path])
       applySnapshot(refreshed, true)
       clearReviewMarksForFile(file.path)
       setSourceEditor((current) => ({
         ...current,
         dirty: false,
-        lastModified: saved.lastModified,
-        size: saved.size,
+        lastModified: saved?.lastModified,
+        size: saved?.size,
         message: '保存完成',
       }))
       setStatus(`已保存 ${file.path}`)
@@ -1020,6 +1236,29 @@ function AppShell({
       setIsBusy(false)
     }
   }
+
+  useEffect(() => {
+    if (view !== 'visual' || fileMode !== 'source' || !selectedFile) return
+    if (sourceEditor.loading || sourceEditor.path === selectedFile.path) return
+    if (
+      sourceEditor.dirty &&
+      sourceEditor.path &&
+      sourceEditor.path !== selectedFile.path
+    ) {
+      setFileMode('structured')
+      toast.warn('请先保存源文件草稿', `${sourceEditor.path} 有未保存修改`)
+      return
+    }
+    void handleLoadSource(selectedFile)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    fileMode,
+    selectedFile?.path,
+    sourceEditor.dirty,
+    sourceEditor.loading,
+    sourceEditor.path,
+    view,
+  ])
 
   async function handleCopy(value: string, label: string) {
     try {
@@ -1039,17 +1278,86 @@ function AppShell({
       toast.warn(`未找到 ${filePath}:${lineNumber}`)
       return
     }
-    setSelectedFilePath(filePath)
-    setSelectedLineKey(lineKey(line))
-    setView('visual')
+    navigateTo({
+      view: 'visual',
+      filePath,
+      lineNumber: line.lineNumber,
+      fileMode: 'structured',
+    })
   }
 
   function handleJumpDiagnostic(diagnostic: Diagnostic) {
     if (diagnostic.filePath && diagnostic.lineNumber) {
       handleJumpToLine(diagnostic.filePath, diagnostic.lineNumber)
     } else if (diagnostic.jumpTo) {
-      setView(diagnostic.jumpTo)
+      navigateToView(diagnostic.jumpTo)
     }
+  }
+
+  function openSelectedLineInVisual() {
+    navigateTo({
+      view: 'visual',
+      ...(selectedLine
+        ? {
+            filePath: selectedLine.filePath,
+            lineNumber: selectedLine.lineNumber,
+          }
+        : {}),
+      fileMode: 'structured',
+    })
+  }
+
+  function openSelectedLineInReview() {
+    navigateTo({
+      view: 'review',
+      ...(selectedLine
+        ? {
+            filePath: selectedLine.filePath,
+            lineNumber: selectedLine.lineNumber,
+          }
+        : {}),
+    })
+  }
+
+  function openReviewScope(scope: ReviewQueueScope) {
+    navigateTo({ view: 'review', reviewScope: scope })
+  }
+
+  function openSelectedLineInSprite() {
+    navigateTo({
+      view: 'sprite',
+      ...(selectedLine
+        ? {
+            filePath: selectedLine.filePath,
+            lineNumber: selectedLine.lineNumber,
+          }
+        : {}),
+    })
+  }
+
+  function openSelectedLineInSource() {
+    navigateTo({
+      view: 'visual',
+      ...(selectedLine
+        ? {
+            filePath: selectedLine.filePath,
+            lineNumber: selectedLine.lineNumber,
+          }
+        : {}),
+      fileMode: 'source',
+    })
+    const file = snapshot?.files.find(
+      (entry) => entry.path === selectedLine?.filePath,
+    )
+    if (file) void handleLoadSource(file)
+  }
+
+  function openDraftQueue() {
+    openReviewScope('dirty')
+  }
+
+  function openDiagnostics() {
+    navigateToView('home')
   }
 
   function handleUpdateCharacter(
@@ -1139,9 +1447,10 @@ function AppShell({
 
   function handleExportReviewMarks() {
     const payload = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       workspaceName: snapshot?.name,
+      workspaceFingerprint: workspaceFingerprint(snapshot),
       marks: reviewMarks,
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -1165,6 +1474,31 @@ function AppShell({
       const parsed = JSON.parse(text) as unknown
       const candidate =
         isRecord(parsed) && 'marks' in parsed ? parsed.marks : parsed
+      if (
+        snapshot &&
+        isRecord(parsed) &&
+        isRecord(parsed.workspaceFingerprint)
+      ) {
+        const importedHash = parsed.workspaceFingerprint.hash
+        const currentFingerprint = workspaceFingerprint(snapshot)
+        if (
+          typeof importedHash === 'string' &&
+          currentFingerprint &&
+          importedHash !== currentFingerprint.hash
+        ) {
+          const importedName =
+            typeof parsed.workspaceFingerprint.workspaceName === 'string'
+              ? parsed.workspaceFingerprint.workspaceName
+              : '未知工作区'
+          const confirmed = await dialog.confirm({
+            title: '校对数据可能来自其他工作区',
+            description: `导出工作区：${importedName}\n当前工作区：${currentFingerprint.workspaceName}\n如果继续导入，记录会按 filePath:lineNumber 合并。`,
+            confirmLabel: '继续导入',
+            tone: 'danger',
+          })
+          if (!confirmed) return
+        }
+      }
       const imported = normalizeReviewMarks(candidate)
       if (!imported) {
         toast.error('导入失败', '文件不是有效的校对数据 JSON')
@@ -1184,6 +1518,53 @@ function AppShell({
     }
   }
 
+  function markSelectedLineFromCommand(
+    markStatus: Exclude<ReviewStatus, 'unreviewed'>,
+  ) {
+    if (!selectedLine) {
+      toast.warn('当前没有选中行')
+      return
+    }
+    handleMarkReview(selectedLine, markStatus)
+    navigateTo({
+      view: 'review',
+      filePath: selectedLine.filePath,
+      lineNumber: selectedLine.lineNumber,
+    })
+  }
+
+  function clearSelectedLineReviewFromCommand() {
+    if (!selectedLine) {
+      toast.warn('当前没有选中行')
+      return
+    }
+    handleClearReviewMark(selectedLine)
+    navigateTo({
+      view: 'review',
+      filePath: selectedLine.filePath,
+      lineNumber: selectedLine.lineNumber,
+    })
+  }
+
+  function applySelectedSpriteFromCommand() {
+    if (!selectedLine || selectedLine.kind !== 'dialogue') {
+      toast.warn('请选择对白行', '立绘快插只能改写对白头部')
+      navigateToView('sprite')
+      return
+    }
+    if (!selectedState) {
+      toast.warn('当前没有选中立绘')
+      navigateToView('sprite')
+      return
+    }
+    void handleApplyDialogueSprite(selectedState)
+    navigateTo({
+      view: 'sprite',
+      filePath: selectedLine.filePath,
+      lineNumber: selectedLine.lineNumber,
+    })
+  }
+
   // Commands
   const commands = useMemo<CommandDefinition[]>(
     () => [
@@ -1200,7 +1581,7 @@ function AppShell({
         hint: 'F5',
         group: '工作区',
         requiresWorkspace: true,
-        shortcut: 'F5',
+        shortcut: formatShortcut(SHORTCUTS.rescan),
         run: handleRescan,
       },
       {
@@ -1222,18 +1603,54 @@ function AppShell({
               : target === 'review'
                 ? '文本 Review'
                 : target === 'sprite'
-                  ? '立绘库'
+                  ? '立绘快插'
                   : target === 'assets'
                     ? '资产管理'
                     : '关于'
         }`,
         group: '导航',
-        run: () => setView(target),
+        run: () => navigateToView(target),
       })),
+      {
+        id: 'context:open-visual',
+        title: '在可视化编辑器中打开当前行',
+        hint: selectedLine
+          ? `${selectedLine.filePath}:${selectedLine.lineNumber}`
+          : '当前没有选中行',
+        group: '当前行',
+        requiresWorkspace: true,
+        run: openSelectedLineInVisual,
+      },
+      {
+        id: 'context:open-review',
+        title: '在文本 Review 中打开当前行',
+        hint: selectedLine
+          ? `${selectedLine.filePath}:${selectedLine.lineNumber}`
+          : '当前没有选中行',
+        group: '当前行',
+        requiresWorkspace: true,
+        run: openSelectedLineInReview,
+      },
+      {
+        id: 'context:open-sprite',
+        title: '在立绘快插中打开当前行',
+        hint: selectedLine?.kind === 'dialogue' ? '定位当前对白' : '定位当前行',
+        group: '当前行',
+        requiresWorkspace: true,
+        run: openSelectedLineInSprite,
+      },
+      {
+        id: 'context:open-source',
+        title: '在源文件中打开当前行',
+        hint: selectedLine?.filePath ?? '当前没有选中行',
+        group: '当前行',
+        requiresWorkspace: true,
+        run: openSelectedLineInSource,
+      },
       {
         id: 'edit:save-line',
         title: '保存当前行',
-        shortcut: 'Ctrl+S',
+        shortcut: formatShortcut(SHORTCUTS.save),
         group: '编辑',
         requiresWorkspace: true,
         run: handleSaveLine,
@@ -1241,10 +1658,76 @@ function AppShell({
       {
         id: 'edit:save-all',
         title: '提交全部草稿',
-        shortcut: 'Ctrl+Shift+S',
+        shortcut: formatShortcut(SHORTCUTS.saveAll),
         group: '编辑',
         requiresWorkspace: true,
         run: handleSaveAllDrafts,
+      },
+      {
+        id: 'review:open-dirty',
+        title: '打开有草稿的校对队列',
+        hint: `${Object.keys(drafts).length} 行草稿`,
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => openReviewScope('dirty'),
+      },
+      {
+        id: 'review:open-needs-change',
+        title: '打开需修改队列',
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => openReviewScope('needs-change'),
+      },
+      {
+        id: 'review:open-diagnostic',
+        title: '打开有诊断队列',
+        hint: `${snapshot?.index.diagnostics.length ?? 0} 条诊断`,
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => openReviewScope('diagnostic'),
+      },
+      {
+        id: 'review:mark-approved',
+        title: '标记当前行为通过',
+        shortcut: formatShortcut(SHORTCUTS.reviewPassed),
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => markSelectedLineFromCommand('approved'),
+      },
+      {
+        id: 'review:mark-needs-change',
+        title: '标记当前行为需修改',
+        shortcut: formatShortcut(SHORTCUTS.reviewNeedsChanges),
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => markSelectedLineFromCommand('needs-change'),
+      },
+      {
+        id: 'review:mark-ignored',
+        title: '标记当前行为忽略',
+        shortcut: formatShortcut(SHORTCUTS.reviewIgnored),
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => markSelectedLineFromCommand('ignored'),
+      },
+      {
+        id: 'review:mark-reset',
+        title: '重置当前行校对状态',
+        shortcut: formatShortcut(SHORTCUTS.reviewReset),
+        group: 'Review',
+        requiresWorkspace: true,
+        run: clearSelectedLineReviewFromCommand,
+      },
+      {
+        id: 'sprite:apply-selected',
+        title: '应用当前选中立绘',
+        hint:
+          selectedState && selectedLine
+            ? `${selectedState.imageTag} → ${selectedLine.filePath}:${selectedLine.lineNumber}`
+            : '需要选中对白行和立绘',
+        group: '立绘快插',
+        requiresWorkspace: true,
+        run: applySelectedSpriteFromCommand,
       },
       {
         id: 'edit:insert-show',
@@ -1282,8 +1765,12 @@ function AppShell({
       selectedLine?.lineNumber,
       selectedLine?.filePath,
       selectedLine?.raw,
+      selectedLine?.kind,
       currentDraftText,
+      navigateTo,
+      navigateToView,
       selectedState?.id,
+      selectedState?.imageTag,
       spritePosition,
       spriteTransition,
     ],
@@ -1293,7 +1780,7 @@ function AppShell({
   useHotkeys(
     [
       {
-        combo: 'mod+s',
+        combo: SHORTCUTS.save,
         handler: () => {
           if (fileMode === 'source' && sourceEditor.dirty) {
             void handleSaveSource()
@@ -1304,18 +1791,18 @@ function AppShell({
         allowInInputs: true,
       },
       {
-        combo: 'mod+shift+s',
+        combo: SHORTCUTS.saveAll,
         handler: () => void handleSaveAllDrafts(),
         allowInInputs: true,
       },
-      { combo: 'F5', handler: () => void handleRescan() },
+      { combo: SHORTCUTS.rescan, handler: () => void handleRescan() },
       {
-        combo: 'j',
+        combo: SHORTCUTS.nextLine,
         handler: () => navigateLine(1),
         disabled: view !== 'sprite',
       },
       {
-        combo: 'k',
+        combo: SHORTCUTS.previousLine,
         handler: () => navigateLine(-1),
         disabled: view !== 'sprite',
       },
@@ -1346,6 +1833,7 @@ function AppShell({
 
   const draftCount = Object.keys(drafts).length
   const diagnosticCount = snapshot?.index.diagnostics.length ?? 0
+  const lineRowHeight = lineRowHeightForDensity(settings.editorDensity)
   const shouldAnimate = settings.motionEnabled && !prefersReducedMotion
   const previousViewRef = useRef<ViewKey>(view)
   const [settledView, setSettledView] = useState<ViewKey>(view)
@@ -1370,11 +1858,13 @@ function AppShell({
     <div className="flex h-screen flex-col">
       <Topbar
         view={view}
-        setView={setView}
+        setView={navigateToView}
         snapshot={snapshot}
         selectedPath={selectedFile?.path}
         isBusy={isBusy}
         onOpen={handleOpenWorkspace}
+        onOpenRecent={(entry) => void handleOpenRecentWorkspace(entry)}
+        onForgetRecent={(entry) => void handleForgetRecentWorkspace(entry)}
         onRescan={handleRescan}
         onForget={handleForgetWorkspace}
         onOpenCommandPalette={palette.open}
@@ -1382,6 +1872,7 @@ function AppShell({
         theme={settings.theme}
         onToggleTheme={toggleTheme}
         onOpenTourGuide={openTourGuide}
+        workspaceHistory={workspaceHistory}
       />
 
       <StatusRail
@@ -1391,6 +1882,10 @@ function AppShell({
         selectedState={selectedState}
         draftCount={draftCount}
         diagnosticCount={diagnosticCount}
+        onOpenSelectedLine={openSelectedLineInVisual}
+        onOpenSelectedSprite={openSelectedLineInSprite}
+        onOpenDrafts={openDraftQueue}
+        onOpenDiagnostics={openDiagnostics}
       />
 
       <div className="relative flex-1 overflow-hidden">
@@ -1405,12 +1900,14 @@ function AppShell({
               <HomeView
                 snapshot={snapshot}
                 status={status}
-                onNavigate={setView}
+                onNavigate={navigateToView}
+                onOpenReviewScope={openReviewScope}
                 onOpen={handleOpenWorkspace}
                 onJumpDiagnostic={handleJumpDiagnostic}
                 isBusy={isBusy}
                 hasUnsaved={hasUnsaved}
                 unsavedCount={draftCount}
+                reviewMarks={reviewMarks}
               />
             )}
 
@@ -1423,7 +1920,7 @@ function AppShell({
                 selectedFile={selectedFile}
                 onSelectFile={handleSelectFile}
                 selectedLine={selectedLine}
-                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                onSelectLine={selectLine}
                 selectedChapter={selectedChapter}
                 fileMode={fileMode}
                 setFileMode={setFileMode}
@@ -1440,6 +1937,7 @@ function AppShell({
                 }
                 onCopy={handleCopy}
                 onSaveLine={(line) => void handleSaveLine(line)}
+                onSaveAllDrafts={() => void handleSaveAllDrafts()}
                 onInsertLine={(position, line) =>
                   void handleInsertLine(position, line)
                 }
@@ -1452,6 +1950,10 @@ function AppShell({
                 dirty={dirty}
                 canSaveLine={isLineDirty}
                 dirtyByFile={dirtyByFile}
+                draftCountInSelectedFile={
+                  selectedFile ? draftCountForFile(selectedFile.path) : 0
+                }
+                lineRowHeight={lineRowHeight}
                 theme={settings.theme}
               />
             )}
@@ -1460,7 +1962,7 @@ function AppShell({
               <ReviewView
                 snapshot={snapshot}
                 selectedLine={selectedLine}
-                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                onSelectLine={selectLine}
                 draftText={currentDraftText}
                 setDraftText={setDraftText}
                 setDraftSpeaker={setDraftSpeaker}
@@ -1487,6 +1989,9 @@ function AppShell({
                 onJumpToLine={handleJumpToLine}
                 showLineOperationPanel={settings.reviewOperationPanelVisible}
                 onToggleLineOperationPanel={toggleReviewOperationPanel}
+                lineRowHeight={lineRowHeight}
+                scope={reviewScope}
+                setScope={setReviewScope}
               />
             )}
 
@@ -1495,7 +2000,7 @@ function AppShell({
                 snapshot={snapshot}
                 selectedLine={selectedLine}
                 selectedState={selectedState}
-                onSelectLine={(line) => setSelectedLineKey(lineKey(line))}
+                onSelectLine={selectLine}
                 onSelectState={setSelectedStateId}
                 onApplyState={(state) => {
                   void handleApplyDialogueSprite(state)
@@ -1505,6 +2010,7 @@ function AppShell({
                 drafts={drafts}
                 spriteCardScale={settings.spriteCardScale}
                 onSpriteCardScaleChange={setSpriteCardScale}
+                lineRowHeight={lineRowHeight}
               />
             )}
 
@@ -1513,8 +2019,11 @@ function AppShell({
                 snapshot={snapshot}
                 assetTab={assetTab}
                 setAssetTab={(tab) => {
-                  setAssetTab(tab)
-                  setSelectedAssetId(undefined)
+                  navigateTo({
+                    view: 'assets',
+                    assetTab: tab,
+                    assetId: undefined,
+                  })
                 }}
                 selectedAssetId={selectedAssetId}
                 onSelectAsset={setSelectedAssetId}
@@ -1533,6 +2042,12 @@ function AppShell({
                 setTheme={setTheme}
                 motionEnabled={settings.motionEnabled}
                 setMotionEnabled={setMotionEnabled}
+                showKeyboardHints={settings.showKeyboardHints}
+                setShowKeyboardHints={setShowKeyboardHints}
+                editorDensity={settings.editorDensity}
+                setEditorDensity={setEditorDensity}
+                scriptFontSize={settings.scriptFontSize}
+                setScriptFontSize={setScriptFontSize}
                 onOpenTourGuide={openTourGuide}
               />
             )}
@@ -1548,7 +2063,7 @@ function AppShell({
         motionEnabled={settings.motionEnabled}
         onOpenChange={setTourGuideOpen}
         onStepChange={setTourGuideStep}
-        onNavigate={setView}
+        onNavigate={(next) => navigateToView(next, 'replace')}
         onComplete={completeTourGuide}
         onSkip={skipTourGuide}
       />

@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "prepare": "husky",
     "typecheck": "tsc -b",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
@@ -16,6 +17,9 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "preview": "vite preview",
+    "sdk:smoke": "bun run scripts/sdk/memory-smoke.ts",
+    "sdk:parser-smoke": "bun run scripts/sdk/parser-optimization-smoke.ts",
+    "sdk:file-smoke": "bun run scripts/sdk/real-file-smoke.ts",
     "deploy:pages": "bun run build && bunx wrangler@latest pages deploy dist --project-name rpy-tool"
   },
   "dependencies": {
@@ -23,6 +27,7 @@
     "motion": "^12.40.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-hotkeys-hook": "^5.3.3",
     "sonner": "^2.0.7"
   },
   "devDependencies": {
@@ -44,6 +49,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "husky": "^9.1.7",
     "lucide-react": "^1.17.0",
     "minimatch": "^10.2.5",
     "postcss": "^8.5.15",
