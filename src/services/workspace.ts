@@ -73,10 +73,7 @@ export async function forgetWorkspace() {
 }
 
 export async function loadWorkspaceHistory() {
-  const history = await idbGet<WorkspaceHistoryEntry[]>(
-    'workspace',
-    WORKSPACE_HISTORY_KEY,
-  )
+  const history = await readStoredWorkspaceHistory()
   if (history) return history
   const current = await idbGet<FileSystemDirectoryHandle>(
     'workspace',
@@ -156,13 +153,46 @@ async function verifyPermission(
 }
 
 async function rememberWorkspace(handle: FileSystemDirectoryHandle) {
-  const history = await loadWorkspaceHistory()
-  const id = workspaceHandleId(handle)
+  const history = (await readStoredWorkspaceHistory()) ?? []
+  const matched = await findSameWorkspaceHistoryEntry(handle, history)
+  const id = matched?.id ?? createWorkspaceHistoryId(handle)
   const next: WorkspaceHistoryEntry[] = [
     { id, name: handle.name, openedAt: Date.now(), handle },
     ...history.filter((entry) => entry.id !== id),
   ].slice(0, MAX_WORKSPACE_HISTORY)
   await idbSet('workspace', WORKSPACE_HISTORY_KEY, next)
+}
+
+async function readStoredWorkspaceHistory() {
+  return idbGet<WorkspaceHistoryEntry[]>('workspace', WORKSPACE_HISTORY_KEY)
+}
+
+async function findSameWorkspaceHistoryEntry(
+  handle: FileSystemDirectoryHandle,
+  history: WorkspaceHistoryEntry[],
+) {
+  for (const entry of history) {
+    if (await isSameWorkspaceHandle(handle, entry.handle)) return entry
+  }
+  return undefined
+}
+
+async function isSameWorkspaceHandle(
+  left: FileSystemDirectoryHandle,
+  right: FileSystemDirectoryHandle,
+) {
+  try {
+    return left === right || (await left.isSameEntry(right))
+  } catch {
+    return left.name === right.name
+  }
+}
+
+function createWorkspaceHistoryId(handle: FileSystemDirectoryHandle) {
+  const random =
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return `${handle.name}:${random}`
 }
 
 function workspaceHandleId(handle: FileSystemDirectoryHandle) {

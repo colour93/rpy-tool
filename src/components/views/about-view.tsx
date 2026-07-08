@@ -11,8 +11,10 @@ import {
   Type,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { SCRIPT_FONT_SIZE_MAX, SCRIPT_FONT_SIZE_MIN } from '@/services/settings'
 import { cn } from '@/lib/cn'
+import { APP_VERSION } from '@/services/app-version'
 import type { EditorDensity, ThemeMode } from '@/types'
 
 const projectNotes = [
@@ -66,7 +68,10 @@ export function AboutView({
           data-tour="about-settings"
         >
           <div className="flex items-center justify-between gap-3 mb-2">
-            <h1 className="text-xl font-semibold">关于</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold">关于</h1>
+              <Badge variant="muted">v{APP_VERSION}</Badge>
+            </div>
             <div
               className="flex flex-wrap items-center justify-end gap-2"
               data-tour="about-guide-actions"

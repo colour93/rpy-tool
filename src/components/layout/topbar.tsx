@@ -18,6 +18,7 @@ import type { ThemeMode, ViewKey, WorkspaceSnapshot } from '@/types'
 import type { WorkspaceHistoryEntry } from '@/services/workspace'
 import { cn } from '@/lib/cn'
 import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
+import { APP_VERSION } from '@/services/app-version'
 
 interface TopbarProps {
   view: ViewKey
@@ -72,6 +73,9 @@ export function Topbar({
             R
           </span>
           <span className="text-sm">Rpy Tool</span>
+          <span className="rounded border border-border bg-secondary/70 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-muted-foreground">
+            v{APP_VERSION}
+          </span>
         </button>
 
         <div className="h-6 w-px bg-border" />
