@@ -17,6 +17,7 @@ import type {
   DraftEntry,
   FileMode,
   ReviewMark,
+  ReviewQueueScope,
   ReviewStatus,
   RpyLine,
   SourceEditorState,
@@ -246,6 +247,9 @@ function AppShell({
   const [assetRules, setAssetRules] = useState<AssetPathRule[]>(() =>
     loadAssetRules(),
   )
+  const [reviewScopeRequest, setReviewScopeRequest] = useState<
+    { id: number; scope: ReviewQueueScope } | undefined
+  >()
 
   const view = settings.view
   const assetTab = settings.assetTab
@@ -683,8 +687,7 @@ function AppShell({
       setStatus(`已恢复工作区 ${restored.name}`)
       toast.success('工作区已恢复', restored.name)
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : '恢复工作区失败'
+      const message = error instanceof Error ? error.message : '恢复工作区失败'
       setStatus(message)
       toast.error('恢复工作区失败', message)
     } finally {
@@ -1262,6 +1265,11 @@ function AppShell({
     setView('review')
   }
 
+  function openReviewScope(scope: ReviewQueueScope) {
+    setReviewScopeRequest({ id: Date.now(), scope })
+    setView('review')
+  }
+
   function openSelectedLineInSprite() {
     if (selectedLine) selectLine(selectedLine)
     setView('sprite')
@@ -1277,7 +1285,7 @@ function AppShell({
   }
 
   function openDraftQueue() {
-    setView('review')
+    openReviewScope('dirty')
   }
 
   function openDiagnostics() {
@@ -1442,6 +1450,41 @@ function AppShell({
     }
   }
 
+  function markSelectedLineFromCommand(
+    markStatus: Exclude<ReviewStatus, 'unreviewed'>,
+  ) {
+    if (!selectedLine) {
+      toast.warn('当前没有选中行')
+      return
+    }
+    handleMarkReview(selectedLine, markStatus)
+    setView('review')
+  }
+
+  function clearSelectedLineReviewFromCommand() {
+    if (!selectedLine) {
+      toast.warn('当前没有选中行')
+      return
+    }
+    handleClearReviewMark(selectedLine)
+    setView('review')
+  }
+
+  function applySelectedSpriteFromCommand() {
+    if (!selectedLine || selectedLine.kind !== 'dialogue') {
+      toast.warn('请选择对白行', '立绘快插只能改写对白头部')
+      setView('sprite')
+      return
+    }
+    if (!selectedState) {
+      toast.warn('当前没有选中立绘')
+      setView('sprite')
+      return
+    }
+    void handleApplyDialogueSprite(selectedState)
+    setView('sprite')
+  }
+
   // Commands
   const commands = useMemo<CommandDefinition[]>(
     () => [
@@ -1541,6 +1584,72 @@ function AppShell({
         run: handleSaveAllDrafts,
       },
       {
+        id: 'review:open-dirty',
+        title: '打开有草稿的校对队列',
+        hint: `${Object.keys(drafts).length} 行草稿`,
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => openReviewScope('dirty'),
+      },
+      {
+        id: 'review:open-needs-change',
+        title: '打开需修改队列',
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => openReviewScope('needs-change'),
+      },
+      {
+        id: 'review:open-diagnostic',
+        title: '打开有诊断队列',
+        hint: `${snapshot?.index.diagnostics.length ?? 0} 条诊断`,
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => openReviewScope('diagnostic'),
+      },
+      {
+        id: 'review:mark-approved',
+        title: '标记当前行为通过',
+        shortcut: formatShortcut(SHORTCUTS.reviewPassed),
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => markSelectedLineFromCommand('approved'),
+      },
+      {
+        id: 'review:mark-needs-change',
+        title: '标记当前行为需修改',
+        shortcut: formatShortcut(SHORTCUTS.reviewNeedsChanges),
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => markSelectedLineFromCommand('needs-change'),
+      },
+      {
+        id: 'review:mark-ignored',
+        title: '标记当前行为忽略',
+        shortcut: formatShortcut(SHORTCUTS.reviewIgnored),
+        group: 'Review',
+        requiresWorkspace: true,
+        run: () => markSelectedLineFromCommand('ignored'),
+      },
+      {
+        id: 'review:mark-reset',
+        title: '重置当前行校对状态',
+        shortcut: formatShortcut(SHORTCUTS.reviewReset),
+        group: 'Review',
+        requiresWorkspace: true,
+        run: clearSelectedLineReviewFromCommand,
+      },
+      {
+        id: 'sprite:apply-selected',
+        title: '应用当前选中立绘',
+        hint:
+          selectedState && selectedLine
+            ? `${selectedState.imageTag} → ${selectedLine.filePath}:${selectedLine.lineNumber}`
+            : '需要选中对白行和立绘',
+        group: '立绘快插',
+        requiresWorkspace: true,
+        run: applySelectedSpriteFromCommand,
+      },
+      {
         id: 'edit:insert-show',
         title: '插入 show',
         group: '编辑',
@@ -1576,8 +1685,10 @@ function AppShell({
       selectedLine?.lineNumber,
       selectedLine?.filePath,
       selectedLine?.raw,
+      selectedLine?.kind,
       currentDraftText,
       selectedState?.id,
+      selectedState?.imageTag,
       spritePosition,
       spriteTransition,
     ],
@@ -1708,6 +1819,7 @@ function AppShell({
                 snapshot={snapshot}
                 status={status}
                 onNavigate={setView}
+                onOpenReviewScope={openReviewScope}
                 onOpen={handleOpenWorkspace}
                 onJumpDiagnostic={handleJumpDiagnostic}
                 isBusy={isBusy}
@@ -1796,6 +1908,7 @@ function AppShell({
                 showLineOperationPanel={settings.reviewOperationPanelVisible}
                 onToggleLineOperationPanel={toggleReviewOperationPanel}
                 lineRowHeight={lineRowHeight}
+                scopeRequest={reviewScopeRequest}
               />
             )}
 

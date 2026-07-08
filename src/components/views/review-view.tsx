@@ -41,18 +41,11 @@ import type {
   Diagnostic,
   DraftEntry,
   ReviewMark,
+  ReviewQueueScope,
   ReviewStatus,
   RpyLine,
   WorkspaceSnapshot,
 } from '@/types'
-
-type ReviewScope =
-  | 'all'
-  | 'chapter'
-  | 'dirty'
-  | 'diagnostic'
-  | 'noted'
-  | ReviewStatus
 
 const statusLabels: Record<ReviewStatus, string> = {
   unreviewed: '未校对',
@@ -101,6 +94,7 @@ export function ReviewView({
   showLineOperationPanel,
   onToggleLineOperationPanel,
   lineRowHeight,
+  scopeRequest,
 }: {
   snapshot?: WorkspaceSnapshot
   selectedLine?: RpyLine
@@ -131,6 +125,7 @@ export function ReviewView({
   showLineOperationPanel: boolean
   onToggleLineOperationPanel: () => void
   lineRowHeight: number
+  scopeRequest?: { id: number; scope: ReviewQueueScope }
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null)
   const leftSidebar = useResizableSidebar({
@@ -145,7 +140,7 @@ export function ReviewView({
     min: 280,
     edge: 'left',
   })
-  const [scope, setScope] = useState<ReviewScope>('all')
+  const [scope, setScope] = useState<ReviewQueueScope>('all')
   const [speakerFilter, setSpeakerFilter] = useState('all')
   const [chapterId, setChapterId] = useState('all')
   const [query, setQuery] = useState('')
@@ -335,6 +330,11 @@ export function ReviewView({
     },
     [onSelectLine],
   )
+
+  useEffect(() => {
+    if (!scopeRequest) return
+    setScope(scopeRequest.scope)
+  }, [scopeRequest])
 
   useEffect(() => {
     if (
@@ -668,7 +668,9 @@ export function ReviewView({
             title={`上一条校对行 (${formatShortcut(SHORTCUTS.previousLine)})`}
           >
             <ChevronUp className="h-3.5 w-3.5" />
-            <KeyboardHint>{formatShortcut(SHORTCUTS.previousLine)}</KeyboardHint>
+            <KeyboardHint>
+              {formatShortcut(SHORTCUTS.previousLine)}
+            </KeyboardHint>
           </Button>
           <Button
             variant="outline"
@@ -777,8 +779,8 @@ function ReviewQueueSidebar({
   searchMatchPosition,
   onNavigateSearch,
 }: {
-  scope: ReviewScope
-  setScope: (scope: ReviewScope) => void
+  scope: ReviewQueueScope
+  setScope: (scope: ReviewQueueScope) => void
   query: string
   setQuery: (query: string) => void
   speakerFilter: string
@@ -801,7 +803,7 @@ function ReviewQueueSidebar({
   onNavigateSearch: (delta: 1 | -1) => void
 }) {
   const items: {
-    key: ReviewScope
+    key: ReviewQueueScope
     label: string
     count: number
     icon: React.ReactNode
@@ -1047,7 +1049,9 @@ function ReviewInspector({
             >
               <Check className="h-3.5 w-3.5" />
               通过
-              <KeyboardHint>{formatShortcut(SHORTCUTS.reviewPassed)}</KeyboardHint>
+              <KeyboardHint>
+                {formatShortcut(SHORTCUTS.reviewPassed)}
+              </KeyboardHint>
             </Button>
             <Button
               variant={status === 'needs-change' ? 'default' : 'outline'}
@@ -1069,7 +1073,9 @@ function ReviewInspector({
             >
               <EyeOff className="h-3.5 w-3.5" />
               忽略
-              <KeyboardHint>{formatShortcut(SHORTCUTS.reviewIgnored)}</KeyboardHint>
+              <KeyboardHint>
+                {formatShortcut(SHORTCUTS.reviewIgnored)}
+              </KeyboardHint>
             </Button>
             <Button
               variant="outline"
@@ -1079,7 +1085,9 @@ function ReviewInspector({
             >
               <Circle className="h-3.5 w-3.5" />
               重置
-              <KeyboardHint>{formatShortcut(SHORTCUTS.reviewReset)}</KeyboardHint>
+              <KeyboardHint>
+                {formatShortcut(SHORTCUTS.reviewReset)}
+              </KeyboardHint>
             </Button>
           </div>
           {mark && (
@@ -1224,7 +1232,7 @@ function ReviewContextPeek({
   )
 }
 
-function scopeLabel(scope: ReviewScope) {
+function scopeLabel(scope: ReviewQueueScope) {
   if (scope === 'all') return '全部校对行'
   if (scope === 'chapter') return '当前章节'
   if (scope === 'dirty') return '有草稿'

@@ -17,6 +17,7 @@ import { cn } from '@/lib/cn'
 import type {
   Diagnostic,
   ReviewMark,
+  ReviewQueueScope,
   ViewKey,
   WorkspaceSnapshot,
 } from '@/types'
@@ -25,6 +26,7 @@ export function HomeView({
   snapshot,
   status,
   onNavigate,
+  onOpenReviewScope,
   onOpen,
   onJumpDiagnostic,
   isBusy,
@@ -35,6 +37,7 @@ export function HomeView({
   snapshot?: WorkspaceSnapshot
   status: string
   onNavigate: (view: ViewKey) => void
+  onOpenReviewScope: (scope: ReviewQueueScope) => void
   onOpen: () => void
   onJumpDiagnostic: (diagnostic: Diagnostic) => void
   isBusy: boolean
@@ -85,7 +88,7 @@ export function HomeView({
           meta: '先处理未保存内容，再继续校对或查分',
           label: '查看草稿',
           icon: ClipboardCheck,
-          onClick: () => onNavigate('review'),
+          onClick: () => onOpenReviewScope('dirty'),
           disabled: false,
         }
       : hasUnsaved
@@ -163,6 +166,12 @@ export function HomeView({
     reviewableLines.length - approvedCount - ignoredCount - needsChangeCount,
   )
   const reviewOpenCount = unreviewedCount + needsChangeCount
+  const reviewOpenScope: ReviewQueueScope =
+    needsChangeCount > 0
+      ? 'needs-change'
+      : unreviewedCount > 0
+        ? 'unreviewed'
+        : 'all'
 
   return (
     <main className="h-[calc(100vh-var(--shell-chrome))] overflow-auto scrollbar-thin">
@@ -276,7 +285,7 @@ export function HomeView({
                 title="草稿"
                 value={unsavedCount > 0 ? `${unsavedCount} 行` : '清空'}
                 done={unsavedCount === 0}
-                onClick={() => onNavigate('review')}
+                onClick={() => onOpenReviewScope('dirty')}
                 disabled={!snapshot || unsavedCount === 0}
               />
               <FinishCheckItem
@@ -303,7 +312,7 @@ export function HomeView({
                         : '完成'
                 }
                 done={reviewableLines.length > 0 && reviewOpenCount === 0}
-                onClick={() => onNavigate('review')}
+                onClick={() => onOpenReviewScope(reviewOpenScope)}
                 disabled={!snapshot || reviewableLines.length === 0}
               />
             </div>

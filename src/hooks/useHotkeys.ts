@@ -63,7 +63,6 @@ export function useHotkeys(hotkeys: Hotkey[], deps: DependencyList = []) {
       enableOnFormTags,
       enableOnContentEditable: enableOnFormTags,
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     deps,
   )
 }

@@ -264,6 +264,14 @@ export type ReviewStatus =
   | 'needs-change'
   | 'ignored'
 
+export type ReviewQueueScope =
+  | 'all'
+  | 'chapter'
+  | 'dirty'
+  | 'diagnostic'
+  | 'noted'
+  | ReviewStatus
+
 export interface ReviewMark {
   /** lineKey = filePath:lineNumber */
   lineKey: string
