@@ -25,6 +25,7 @@ import {
   Toolbar,
 } from '@/components/shared'
 import { useResizableSidebar } from '@/hooks/useResizableSidebar'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 import {
   chapterForLine,
   lineKey,
@@ -283,10 +284,10 @@ export function SpriteView({
             size="sm"
             onClick={handlePrev}
             disabled={currentIndex <= 0}
-            title="上一行 (K)"
+            title={`上一行 (${formatShortcut(SHORTCUTS.previousLine)})`}
           >
             <ChevronUp className="h-3.5 w-3.5" />
-            <KeyboardHint>K</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.previousLine)}</KeyboardHint>
           </Button>
           <Button
             variant="outline"
@@ -295,10 +296,10 @@ export function SpriteView({
             disabled={
               currentIndex < 0 || currentIndex >= filteredLines.length - 1
             }
-            title="下一行 (J)"
+            title={`下一行 (${formatShortcut(SHORTCUTS.nextLine)})`}
           >
             <ChevronDown className="h-3.5 w-3.5" />
-            <KeyboardHint>J</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.nextLine)}</KeyboardHint>
           </Button>
         </Toolbar>
         <div className="min-h-0 flex-1">

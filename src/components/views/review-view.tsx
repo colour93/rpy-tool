@@ -28,6 +28,7 @@ import {
 } from '@/components/shared'
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { useResizableSidebar } from '@/hooks/useResizableSidebar'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 import {
   chapterForLine,
   lineKey,
@@ -511,31 +512,39 @@ export function ReviewView({
 
   useHotkeys(
     [
-      { combo: 'j', handler: handleNext, disabled: filteredLines.length === 0 },
-      { combo: 'k', handler: handlePrev, disabled: filteredLines.length === 0 },
       {
-        combo: '1',
+        combo: SHORTCUTS.nextLine,
+        handler: handleNext,
+        disabled: filteredLines.length === 0,
+      },
+      {
+        combo: SHORTCUTS.previousLine,
+        handler: handlePrev,
+        disabled: filteredLines.length === 0,
+      },
+      {
+        combo: SHORTCUTS.reviewPassed,
         handler: () => handleMarkAndAdvance('approved'),
         disabled: operationLines.length === 0,
       },
       {
-        combo: '2',
+        combo: SHORTCUTS.reviewNeedsChanges,
         handler: () => handleMarkAndAdvance('needs-change'),
         disabled: operationLines.length === 0,
       },
       {
-        combo: '3',
+        combo: SHORTCUTS.reviewIgnored,
         handler: () => handleMarkAndAdvance('ignored'),
         disabled: operationLines.length === 0,
       },
       {
-        combo: '0',
+        combo: SHORTCUTS.reviewReset,
         handler: handleClearAndAdvance,
         disabled: operationLines.length === 0,
       },
-      { combo: 'mod+a', handler: handleSelectAllFilteredLines },
+      { combo: SHORTCUTS.selectAll, handler: handleSelectAllFilteredLines },
       {
-        combo: 'Escape',
+        combo: SHORTCUTS.escape,
         handler: handleCollapseSelection,
         disabled: visibleSelectedLineKeys.size <= 1 && Boolean(activeLineKey),
       },
@@ -606,22 +615,22 @@ export function ReviewView({
             size="sm"
             onClick={handleSelectAllFilteredLines}
             disabled={filteredLines.length === 0}
-            title="全选当前筛选结果 (Ctrl+A)"
+            title={`全选当前筛选结果 (${formatShortcut(SHORTCUTS.selectAll)})`}
           >
             <SquareCheckBig className="h-3.5 w-3.5" />
             全选
-            <KeyboardHint>Ctrl+A</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.selectAll)}</KeyboardHint>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={handleCollapseSelection}
             disabled={visibleSelectedLineKeys.size <= 1}
-            title="取消多选 (Esc)"
+            title={`取消多选 (${formatShortcut(SHORTCUTS.escape)})`}
           >
             <X className="h-3.5 w-3.5" />
             取消选择
-            <KeyboardHint>Esc</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.escape)}</KeyboardHint>
           </Button>
           <Button
             variant={showLineOperationPanel ? 'default' : 'outline'}
@@ -656,10 +665,10 @@ export function ReviewView({
             size="sm"
             onClick={handlePrev}
             disabled={currentIndex <= 0}
-            title="上一条校对行 (K)"
+            title={`上一条校对行 (${formatShortcut(SHORTCUTS.previousLine)})`}
           >
             <ChevronUp className="h-3.5 w-3.5" />
-            <KeyboardHint>K</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.previousLine)}</KeyboardHint>
           </Button>
           <Button
             variant="outline"
@@ -668,10 +677,10 @@ export function ReviewView({
             disabled={
               currentIndex < 0 || currentIndex >= filteredLines.length - 1
             }
-            title="下一条校对行 (J)"
+            title={`下一条校对行 (${formatShortcut(SHORTCUTS.nextLine)})`}
           >
             <ChevronDown className="h-3.5 w-3.5" />
-            <KeyboardHint>J</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.nextLine)}</KeyboardHint>
           </Button>
           <Button
             variant="outline"
@@ -679,7 +688,8 @@ export function ReviewView({
             onClick={onSaveAllDrafts}
             disabled={totalDrafts === 0 || isBusy}
           >
-            提交全部 ({totalDrafts})<KeyboardHint>Ctrl+Shift+S</KeyboardHint>
+            提交全部 ({totalDrafts})
+            <KeyboardHint>{formatShortcut(SHORTCUTS.saveAll)}</KeyboardHint>
           </Button>
         </Toolbar>
         <ScriptLineWorkbench
@@ -1037,7 +1047,7 @@ function ReviewInspector({
             >
               <Check className="h-3.5 w-3.5" />
               通过
-              <KeyboardHint>1</KeyboardHint>
+              <KeyboardHint>{formatShortcut(SHORTCUTS.reviewPassed)}</KeyboardHint>
             </Button>
             <Button
               variant={status === 'needs-change' ? 'default' : 'outline'}
@@ -1047,7 +1057,9 @@ function ReviewInspector({
             >
               <MessageSquareWarning className="h-3.5 w-3.5" />
               需修改
-              <KeyboardHint>2</KeyboardHint>
+              <KeyboardHint>
+                {formatShortcut(SHORTCUTS.reviewNeedsChanges)}
+              </KeyboardHint>
             </Button>
             <Button
               variant={status === 'ignored' ? 'default' : 'outline'}
@@ -1057,7 +1069,7 @@ function ReviewInspector({
             >
               <EyeOff className="h-3.5 w-3.5" />
               忽略
-              <KeyboardHint>3</KeyboardHint>
+              <KeyboardHint>{formatShortcut(SHORTCUTS.reviewIgnored)}</KeyboardHint>
             </Button>
             <Button
               variant="outline"
@@ -1067,7 +1079,7 @@ function ReviewInspector({
             >
               <Circle className="h-3.5 w-3.5" />
               重置
-              <KeyboardHint>0</KeyboardHint>
+              <KeyboardHint>{formatShortcut(SHORTCUTS.reviewReset)}</KeyboardHint>
             </Button>
           </div>
           {mark && (

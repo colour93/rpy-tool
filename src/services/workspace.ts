@@ -3,6 +3,15 @@ import { buildRpyIndex } from './rpyParser'
 import { idbDelete, idbGet, idbSet } from './storage'
 
 const WORKSPACE_KEY = 'current'
+const WORKSPACE_HISTORY_KEY = 'history'
+const MAX_WORKSPACE_HISTORY = 8
+
+export interface WorkspaceHistoryEntry {
+  id: string
+  name: string
+  openedAt: number
+  handle: FileSystemDirectoryHandle
+}
 const DEFAULT_IGNORES = new Set([
   '.git',
   '.renpy',
@@ -24,24 +33,73 @@ export async function openWorkspace() {
 
   const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
   await idbSet('workspace', WORKSPACE_KEY, handle)
+  await rememberWorkspace(handle)
   return scanWorkspace(handle)
 }
 
-export async function restoreWorkspace() {
+export async function restoreWorkspace(options?: { requestPermission?: boolean }) {
   const handle = await idbGet<FileSystemDirectoryHandle>(
     'workspace',
     WORKSPACE_KEY,
   )
   if (!handle) return undefined
 
-  const permission = await verifyPermission(handle)
+  const permission = await verifyPermission(
+    handle,
+    Boolean(options?.requestPermission),
+  )
   if (!permission) return undefined
 
   return scanWorkspace(handle)
 }
 
+export async function restoreWorkspaceHandle(
+  handle: FileSystemDirectoryHandle,
+  options?: { requestPermission?: boolean },
+) {
+  const permission = await verifyPermission(
+    handle,
+    Boolean(options?.requestPermission),
+  )
+  if (!permission) return undefined
+  await idbSet('workspace', WORKSPACE_KEY, handle)
+  await rememberWorkspace(handle)
+  return scanWorkspace(handle)
+}
+
 export async function forgetWorkspace() {
   await idbDelete('workspace', WORKSPACE_KEY)
+}
+
+export async function loadWorkspaceHistory() {
+  const history = await idbGet<WorkspaceHistoryEntry[]>(
+    'workspace',
+    WORKSPACE_HISTORY_KEY,
+  )
+  if (history) return history
+  const current = await idbGet<FileSystemDirectoryHandle>(
+    'workspace',
+    WORKSPACE_KEY,
+  )
+  return current
+    ? [
+        {
+          id: workspaceHandleId(current),
+          name: current.name,
+          openedAt: 0,
+          handle: current,
+        },
+      ]
+    : []
+}
+
+export async function forgetWorkspaceHistoryEntry(id: string) {
+  const history = await loadWorkspaceHistory()
+  await idbSet(
+    'workspace',
+    WORKSPACE_HISTORY_KEY,
+    history.filter((entry) => entry.id !== id),
+  )
 }
 
 export async function scanWorkspace(
@@ -114,10 +172,28 @@ export async function readBlob(file: FileEntry) {
   return file.handle.getFile()
 }
 
-async function verifyPermission(handle: FileSystemDirectoryHandle) {
+async function verifyPermission(
+  handle: FileSystemDirectoryHandle,
+  requestIfNeeded: boolean,
+) {
   const descriptor = { mode: 'readwrite' as const }
   if ((await handle.queryPermission(descriptor)) === 'granted') return true
+  if (!requestIfNeeded) return false
   return (await handle.requestPermission(descriptor)) === 'granted'
+}
+
+async function rememberWorkspace(handle: FileSystemDirectoryHandle) {
+  const history = await loadWorkspaceHistory()
+  const id = workspaceHandleId(handle)
+  const next: WorkspaceHistoryEntry[] = [
+    { id, name: handle.name, openedAt: Date.now(), handle },
+    ...history.filter((entry) => entry.id !== id),
+  ].slice(0, MAX_WORKSPACE_HISTORY)
+  await idbSet('workspace', WORKSPACE_HISTORY_KEY, next)
+}
+
+function workspaceHandleId(handle: FileSystemDirectoryHandle) {
+  return handle.name
 }
 
 async function walkDirectory(

@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>rpy-tool</title>
+    <script>
+      ;(() => {
+        try {
+          const stored =
+            localStorage.getItem('rpy-tool:theme') ||
+            JSON.parse(localStorage.getItem('rpy-tool:settings') || '{}').theme
+          const theme =
+            stored === 'dark' || stored === 'light' ? stored : 'light'
+          document.documentElement.dataset.theme = theme
+          document.documentElement.classList.toggle('dark', theme === 'dark')
+        } catch {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
     <style>
       html,
       body,
@@ -93,33 +108,31 @@
         }
       }
 
-      @media (prefers-color-scheme: dark) {
-        .app-boot {
-          background: #101114;
-          color: #eef0f3;
-        }
+      html[data-theme='dark'] .app-boot {
+        background: #101114;
+        color: #eef0f3;
+      }
 
-        .app-boot__box {
-          border-color: #30343d;
-          background: #181a1f;
-        }
+      html[data-theme='dark'] .app-boot__box {
+        border-color: #30343d;
+        background: #181a1f;
+      }
 
-        .app-boot__row,
-        .app-boot__key {
-          border-color: #30343d;
-        }
+      html[data-theme='dark'] .app-boot__row,
+      html[data-theme='dark'] .app-boot__key {
+        border-color: #30343d;
+      }
 
-        .app-boot__key {
-          color: #9da6b5;
-        }
+      html[data-theme='dark'] .app-boot__key {
+        color: #9da6b5;
+      }
 
-        .app-boot__track {
-          background: #23262e;
-        }
+      html[data-theme='dark'] .app-boot__track {
+        background: #23262e;
+      }
 
-        .app-boot__bar {
-          background: #60a5fa;
-        }
+      html[data-theme='dark'] .app-boot__bar {
+        background: #60a5fa;
       }
     </style>
   </head>

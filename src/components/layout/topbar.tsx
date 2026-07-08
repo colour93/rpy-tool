@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import {
+  Clock3,
   Folder,
   FolderOpen,
   HelpCircle,
@@ -13,7 +15,9 @@ import { Badge } from '@/components/ui/badge'
 import { KeyboardHint } from '@/components/shared'
 import { navigation } from '@/appHelpers'
 import type { ThemeMode, ViewKey, WorkspaceSnapshot } from '@/types'
+import type { WorkspaceHistoryEntry } from '@/services/workspace'
 import { cn } from '@/lib/cn'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 
 interface TopbarProps {
   view: ViewKey
@@ -22,6 +26,8 @@ interface TopbarProps {
   selectedPath?: string
   isBusy: boolean
   onOpen: () => void
+  onOpenRecent: (entry: WorkspaceHistoryEntry) => void
+  onForgetRecent: (entry: WorkspaceHistoryEntry) => void
   onRescan: () => void
   onForget: () => void
   onOpenCommandPalette: () => void
@@ -29,6 +35,7 @@ interface TopbarProps {
   theme: ThemeMode
   onToggleTheme: () => void
   onOpenTourGuide: () => void
+  workspaceHistory: WorkspaceHistoryEntry[]
 }
 
 export function Topbar({
@@ -38,6 +45,8 @@ export function Topbar({
   selectedPath,
   isBusy,
   onOpen,
+  onOpenRecent,
+  onForgetRecent,
   onRescan,
   onForget,
   onOpenCommandPalette,
@@ -45,7 +54,11 @@ export function Topbar({
   theme,
   onToggleTheme,
   onOpenTourGuide,
+  workspaceHistory,
 }: TopbarProps) {
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const hasHistory = workspaceHistory.length > 0
+
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-card">
       <div className="flex h-14 items-center gap-3 px-4">
@@ -88,10 +101,10 @@ export function Topbar({
             variant="outline"
             size="sm"
             onClick={onOpenCommandPalette}
-            title="命令面板 (Ctrl+K)"
+            title={`命令面板 (${formatShortcut(SHORTCUTS.commandPalette)})`}
           >
             <Search className="h-3.5 w-3.5" />
-            <KeyboardHint>Ctrl+K</KeyboardHint>
+            <KeyboardHint>{formatShortcut(SHORTCUTS.commandPalette)}</KeyboardHint>
           </Button>
           <Button
             variant="outline"
@@ -125,13 +138,13 @@ export function Topbar({
                 size="sm"
                 onClick={onRescan}
                 disabled={isBusy}
-                title="重新扫描 (F5)"
+                title={`重新扫描 (${formatShortcut(SHORTCUTS.rescan)})`}
               >
                 <RefreshCw
                   className={cn('h-3.5 w-3.5', isBusy && 'animate-spin')}
                 />
                 重扫
-                <KeyboardHint>F5</KeyboardHint>
+                <KeyboardHint>{formatShortcut(SHORTCUTS.rescan)}</KeyboardHint>
               </Button>
               <Button
                 variant="outline"
@@ -152,18 +165,67 @@ export function Topbar({
                 <FolderOpen className="h-3.5 w-3.5" />
                 换一个
               </Button>
+              {hasHistory && (
+                <div className="relative">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryOpen((open) => !open)}
+                    disabled={isBusy}
+                    title="最近工作区"
+                  >
+                    <Clock3 className="h-3.5 w-3.5" />
+                    最近
+                  </Button>
+                  {historyOpen && (
+                    <WorkspaceHistoryMenu
+                      history={workspaceHistory}
+                      onOpen={(entry) => {
+                        setHistoryOpen(false)
+                        onOpenRecent(entry)
+                      }}
+                      onForget={onForgetRecent}
+                    />
+                  )}
+                </div>
+              )}
             </>
           ) : (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={onOpen}
-              disabled={isBusy}
-              data-tour="workspace-action"
-            >
-              <Folder className="h-3.5 w-3.5" />
-              打开工作区
-            </Button>
+            <>
+              {hasHistory && (
+                <div className="relative" data-tour="workspace-action">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setHistoryOpen((open) => !open)}
+                    disabled={isBusy}
+                  >
+                    <Clock3 className="h-3.5 w-3.5" />
+                    最近工作区
+                  </Button>
+                  {historyOpen && (
+                    <WorkspaceHistoryMenu
+                      history={workspaceHistory}
+                      onOpen={(entry) => {
+                        setHistoryOpen(false)
+                        onOpenRecent(entry)
+                      }}
+                      onForget={onForgetRecent}
+                    />
+                  )}
+                </div>
+              )}
+              <Button
+                variant={hasHistory ? 'outline' : 'default'}
+                size="sm"
+                onClick={onOpen}
+                disabled={isBusy}
+                data-tour={hasHistory ? undefined : 'workspace-action'}
+              >
+                <Folder className="h-3.5 w-3.5" />
+                打开工作区
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -187,5 +249,51 @@ export function Topbar({
         ) : null}
       </div>
     </header>
+  )
+}
+
+function WorkspaceHistoryMenu({
+  history,
+  onOpen,
+  onForget,
+}: {
+  history: WorkspaceHistoryEntry[]
+  onOpen: (entry: WorkspaceHistoryEntry) => void
+  onForget: (entry: WorkspaceHistoryEntry) => void
+}) {
+  return (
+    <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-xl">
+      <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">
+        最近工作区
+      </div>
+      {history.map((entry) => (
+        <div
+          key={entry.id}
+          className="group flex items-center gap-1 rounded-md hover:bg-secondary"
+        >
+          <button
+            type="button"
+            className="min-w-0 flex-1 px-2 py-2 text-left"
+            onClick={() => onOpen(entry)}
+            title={entry.name}
+          >
+            <div className="truncate text-xs font-semibold">{entry.name}</div>
+            <div className="mt-0.5 text-[10px] text-muted-foreground">
+              {entry.openedAt
+                ? new Date(entry.openedAt).toLocaleString()
+                : '已关联'}
+            </div>
+          </button>
+          <button
+            type="button"
+            className="mr-1 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-background hover:text-foreground group-hover:opacity-100"
+            onClick={() => onForget(entry)}
+            title="从最近工作区移除"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
   )
 }

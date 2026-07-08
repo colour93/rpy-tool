@@ -10,6 +10,7 @@ import type {
 
 const KEYS = {
   settings: 'rpy-tool:settings',
+  theme: 'rpy-tool:theme',
   drafts: 'rpy-tool:drafts',
   characterOverrides: 'rpy-tool:characters',
   chapterOverrides: 'rpy-tool:chapters',
@@ -61,6 +62,7 @@ export function clampSpriteCardScale(value: unknown) {
 
 const defaultSettings: UserSettings = {
   theme: 'light',
+  showKeyboardHints: true,
   editorDensity: 'default',
   scriptFontSize: SCRIPT_FONT_SIZE_DEFAULT,
   view: 'home',
@@ -80,11 +82,13 @@ const defaultSettings: UserSettings = {
 export function loadSettings(): UserSettings {
   try {
     const raw = localStorage.getItem(KEYS.settings)
-    if (!raw) return defaultSettings
+    const theme = loadTheme()
+    if (!raw) return { ...defaultSettings, theme }
     const parsed = JSON.parse(raw) as Partial<UserSettings>
     return {
       ...defaultSettings,
       ...parsed,
+      theme,
       spriteCardScale: clampSpriteCardScale(parsed.spriteCardScale),
       editorDensity: normalizeEditorDensity(parsed.editorDensity),
       scriptFontSize: clampScriptFontSize(parsed.scriptFontSize),
@@ -96,9 +100,23 @@ export function loadSettings(): UserSettings {
 
 export function saveSettings(settings: UserSettings) {
   try {
+    localStorage.setItem(KEYS.theme, settings.theme)
     localStorage.setItem(KEYS.settings, JSON.stringify(settings))
   } catch {
     // ignore quota errors
+  }
+}
+
+function loadTheme(): UserSettings['theme'] {
+  try {
+    const rawTheme = localStorage.getItem(KEYS.theme)
+    if (rawTheme === 'light' || rawTheme === 'dark') return rawTheme
+    const raw = localStorage.getItem(KEYS.settings)
+    if (!raw) return defaultSettings.theme
+    const parsed = JSON.parse(raw) as Partial<UserSettings>
+    return parsed.theme === 'dark' ? 'dark' : 'light'
+  } catch {
+    return defaultSettings.theme
   }
 }
 

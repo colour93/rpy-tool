@@ -209,6 +209,7 @@ export interface SourceEditorState {
 
 export interface UserSettings {
   theme: ThemeMode
+  showKeyboardHints: boolean
   editorDensity: EditorDensity
   scriptFontSize: number
   view: ViewKey

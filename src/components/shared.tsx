@@ -31,6 +31,11 @@ import {
 } from '@/appHelpers'
 import { getImagePreviewUrl } from '@/services/thumbnails'
 import { normalizePathKey } from '@/services/path-utils'
+import {
+  formatShortcut,
+  shortcutDisplayParts,
+  SHORTCUTS,
+} from '@/lib/shortcuts'
 import type {
   CharacterState,
   CharacterRegistryItem,
@@ -420,7 +425,7 @@ function LineRowMenu({
     >
       <ContextMenuButton
         label="保存行"
-        shortcut="Ctrl+S"
+        shortcut={formatShortcut(SHORTCUTS.save)}
         disabled={!canSave}
         onClick={() => onRun(() => actions.onSaveLine?.(line), canSave)}
       />
@@ -541,7 +546,7 @@ export function LineOperationPanel({
         disabled={!canEditText || isBusy}
         placeholder={
           line?.editable
-            ? '编辑后按 Ctrl+S 保存'
+            ? `编辑后按 ${formatShortcut(SHORTCUTS.save)} 保存`
             : line
               ? '当前行只能插入或删除'
               : '请选择一行'
@@ -555,11 +560,11 @@ export function LineOperationPanel({
           size="sm"
           onClick={onSaveLine}
           disabled={!canSave}
-          title="保存当前行 (Ctrl+S)"
+          title={`保存当前行 (${formatShortcut(SHORTCUTS.save)})`}
         >
           <Save className="h-3.5 w-3.5" />
           保存行
-          <KeyboardHint>Ctrl+S</KeyboardHint>
+          <KeyboardHint>{formatShortcut(SHORTCUTS.save)}</KeyboardHint>
         </Button>
         <Button
           variant="outline"
@@ -633,9 +638,29 @@ export function OriginalLineCode({
 }
 
 export function KeyboardHint({ children }: { children: React.ReactNode }) {
+  const parts =
+    typeof children === 'string' ? shortcutDisplayParts(children) : undefined
+
   return (
-    <kbd className="rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted-foreground">
-      {children}
+    <kbd
+      data-key-hint
+      className="inline-flex min-h-5 items-center gap-0.5 rounded border border-border bg-secondary px-1.5 py-0.5 align-middle text-[10px] font-semibold leading-none text-muted-foreground"
+    >
+      {parts
+        ? parts.map((part, index) => (
+            <span
+              key={`${part.value}-${index}`}
+              className={cn(
+                part.kind === 'modifier'
+                  ? 'font-sans text-[13px] leading-none'
+                  : 'font-mono',
+                part.kind === 'separator' && 'font-mono opacity-70',
+              )}
+            >
+              {part.value}
+            </span>
+          ))
+        : children}
     </kbd>
   )
 }
@@ -665,7 +690,10 @@ function ContextMenuButton({
     >
       <span>{label}</span>
       {shortcut && (
-        <span className="font-mono text-[10px] text-muted-foreground">
+        <span
+          data-key-hint
+          className="font-mono text-[10px] text-muted-foreground"
+        >
           {shortcut}
         </span>
       )}

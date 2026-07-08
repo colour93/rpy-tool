@@ -35,11 +35,15 @@ import {
 } from '@/services/rpyParser'
 import {
   forgetWorkspace,
+  forgetWorkspaceHistoryEntry,
+  loadWorkspaceHistory,
   openWorkspace,
   readTextFile,
   rescanFiles,
   restoreWorkspace,
+  restoreWorkspaceHandle,
   writeTextFile,
+  type WorkspaceHistoryEntry,
 } from '@/services/workspace'
 import {
   clearDraft,
@@ -89,6 +93,7 @@ import { AssetsView } from '@/components/views/assets-view'
 import { AboutView } from '@/components/views/about-view'
 import { TourGuide } from '@/components/tour-guide'
 import { tourGuideSteps } from '@/services/tour-guide'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 
 const viewOrder: ViewKey[] = [
   'home',
@@ -203,6 +208,9 @@ function AppShell({
     () => !settings.tourGuideCompleted,
   )
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | undefined>()
+  const [workspaceHistory, setWorkspaceHistory] = useState<
+    WorkspaceHistoryEntry[]
+  >([])
   const [status, setStatus] = useState('准备打开 RenPy 工作区')
   const [isBusy, setIsBusy] = useState(false)
   const [isRestoring, setIsRestoring] = useState(true)
@@ -252,6 +260,9 @@ function AppShell({
   }, [])
   const setMotionEnabled = useCallback((motionEnabled: boolean) => {
     setSettings((current) => ({ ...current, motionEnabled }))
+  }, [])
+  const setShowKeyboardHints = useCallback((showKeyboardHints: boolean) => {
+    setSettings((current) => ({ ...current, showKeyboardHints }))
   }, [])
   const setEditorDensity = useCallback(
     (editorDensity: UserSettings['editorDensity']) => {
@@ -334,6 +345,11 @@ function AppShell({
     document.documentElement.classList.toggle('dark', settings.theme === 'dark')
   }, [settings.theme])
   useEffect(() => {
+    document.documentElement.dataset.keyHints = String(
+      settings.showKeyboardHints,
+    )
+  }, [settings.showKeyboardHints])
+  useEffect(() => {
     document.documentElement.dataset.density = settings.editorDensity
     document.documentElement.style.setProperty(
       '--script-font-size',
@@ -348,8 +364,18 @@ function AppShell({
   useEffect(() => {
     let cancelled = false
     setIsBusy(true)
-    restoreWorkspace()
-      .then((restored) => {
+    Promise.all([loadWorkspaceHistory(), restoreWorkspace()])
+      .then(([history, restored]) => {
+        if (cancelled) return
+        setWorkspaceHistory(history)
+        if (!restored) {
+          setStatus(
+            history.length
+              ? '请选择最近工作区恢复访问'
+              : '准备打开 RenPy 工作区',
+          )
+          return
+        }
         if (!restored || cancelled) return
         const reclassified = {
           ...restored,
@@ -373,7 +399,7 @@ function AppShell({
         const message =
           error instanceof Error ? error.message : '恢复工作区失败'
         setStatus(message)
-        toast.error('恢复工作区失败', message)
+        toast.error('读取工作区历史失败', message)
       })
       .finally(() => {
         if (!cancelled) {
@@ -571,6 +597,7 @@ function AppShell({
     try {
       const next = await openWorkspace()
       applySnapshot(next, false)
+      setWorkspaceHistory(await loadWorkspaceHistory())
       setDrafts({})
       setSourceEditor({ content: '', dirty: false, loading: false })
       setStatus(
@@ -592,7 +619,7 @@ function AppShell({
     setIsBusy(true)
     setStatus('正在重新扫描工作区…')
     try {
-      const restored = await restoreWorkspace()
+      const restored = await restoreWorkspace({ requestPermission: true })
       if (restored) {
         applySnapshot(restored, true)
         setStatus(`重新索引完成：${restored.files.length} 个文件`)
@@ -626,6 +653,49 @@ function AppShell({
     setDrafts({})
     setStatus('已关闭当前工作区')
     toast.info('已关闭工作区')
+  }
+
+  async function handleOpenRecentWorkspace(entry: WorkspaceHistoryEntry) {
+    if (hasUnsaved) {
+      const confirmed = await dialog.confirm({
+        title: '当前有未保存改动',
+        description: '切换工作区会清除当前会话状态。',
+        confirmLabel: '继续切换',
+        tone: 'danger',
+      })
+      if (!confirmed) return
+    }
+    setIsBusy(true)
+    setStatus(`正在恢复 ${entry.name}…`)
+    try {
+      const restored = await restoreWorkspaceHandle(entry.handle, {
+        requestPermission: true,
+      })
+      if (!restored) {
+        setStatus('没有获得工作区权限')
+        toast.warn('未恢复工作区', '浏览器没有授予目录访问权限')
+        return
+      }
+      applySnapshot(restored, false)
+      setDrafts({})
+      setSourceEditor({ content: '', dirty: false, loading: false })
+      setWorkspaceHistory(await loadWorkspaceHistory())
+      setStatus(`已恢复工作区 ${restored.name}`)
+      toast.success('工作区已恢复', restored.name)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '恢复工作区失败'
+      setStatus(message)
+      toast.error('恢复工作区失败', message)
+    } finally {
+      setIsBusy(false)
+    }
+  }
+
+  async function handleForgetRecentWorkspace(entry: WorkspaceHistoryEntry) {
+    await forgetWorkspaceHistoryEntry(entry.id)
+    setWorkspaceHistory(await loadWorkspaceHistory())
+    toast.info('已移除最近工作区', entry.name)
   }
 
   function handleSelectFile(path: string, line?: RpyLine) {
@@ -1388,7 +1458,7 @@ function AppShell({
         hint: 'F5',
         group: '工作区',
         requiresWorkspace: true,
-        shortcut: 'F5',
+        shortcut: formatShortcut(SHORTCUTS.rescan),
         run: handleRescan,
       },
       {
@@ -1457,7 +1527,7 @@ function AppShell({
       {
         id: 'edit:save-line',
         title: '保存当前行',
-        shortcut: 'Ctrl+S',
+        shortcut: formatShortcut(SHORTCUTS.save),
         group: '编辑',
         requiresWorkspace: true,
         run: handleSaveLine,
@@ -1465,7 +1535,7 @@ function AppShell({
       {
         id: 'edit:save-all',
         title: '提交全部草稿',
-        shortcut: 'Ctrl+Shift+S',
+        shortcut: formatShortcut(SHORTCUTS.saveAll),
         group: '编辑',
         requiresWorkspace: true,
         run: handleSaveAllDrafts,
@@ -1517,7 +1587,7 @@ function AppShell({
   useHotkeys(
     [
       {
-        combo: 'mod+s',
+        combo: SHORTCUTS.save,
         handler: () => {
           if (fileMode === 'source' && sourceEditor.dirty) {
             void handleSaveSource()
@@ -1528,18 +1598,18 @@ function AppShell({
         allowInInputs: true,
       },
       {
-        combo: 'mod+shift+s',
+        combo: SHORTCUTS.saveAll,
         handler: () => void handleSaveAllDrafts(),
         allowInInputs: true,
       },
-      { combo: 'F5', handler: () => void handleRescan() },
+      { combo: SHORTCUTS.rescan, handler: () => void handleRescan() },
       {
-        combo: 'j',
+        combo: SHORTCUTS.nextLine,
         handler: () => navigateLine(1),
         disabled: view !== 'sprite',
       },
       {
-        combo: 'k',
+        combo: SHORTCUTS.previousLine,
         handler: () => navigateLine(-1),
         disabled: view !== 'sprite',
       },
@@ -1600,6 +1670,8 @@ function AppShell({
         selectedPath={selectedFile?.path}
         isBusy={isBusy}
         onOpen={handleOpenWorkspace}
+        onOpenRecent={(entry) => void handleOpenRecentWorkspace(entry)}
+        onForgetRecent={(entry) => void handleForgetRecentWorkspace(entry)}
         onRescan={handleRescan}
         onForget={handleForgetWorkspace}
         onOpenCommandPalette={palette.open}
@@ -1607,6 +1679,7 @@ function AppShell({
         theme={settings.theme}
         onToggleTheme={toggleTheme}
         onOpenTourGuide={openTourGuide}
+        workspaceHistory={workspaceHistory}
       />
 
       <StatusRail
@@ -1770,6 +1843,8 @@ function AppShell({
                 setTheme={setTheme}
                 motionEnabled={settings.motionEnabled}
                 setMotionEnabled={setMotionEnabled}
+                showKeyboardHints={settings.showKeyboardHints}
+                setShowKeyboardHints={setShowKeyboardHints}
                 editorDensity={settings.editorDensity}
                 setEditorDensity={setEditorDensity}
                 scriptFontSize={settings.scriptFontSize}

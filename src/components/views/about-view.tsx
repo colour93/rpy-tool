@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
+  Keyboard,
   Type,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,8 @@ export function AboutView({
   setTheme,
   motionEnabled,
   setMotionEnabled,
+  showKeyboardHints,
+  setShowKeyboardHints,
   editorDensity,
   setEditorDensity,
   scriptFontSize,
@@ -47,6 +50,8 @@ export function AboutView({
   setTheme: (theme: ThemeMode) => void
   motionEnabled: boolean
   setMotionEnabled: (enabled: boolean) => void
+  showKeyboardHints: boolean
+  setShowKeyboardHints: (enabled: boolean) => void
   editorDensity: EditorDensity
   setEditorDensity: (density: EditorDensity) => void
   scriptFontSize: number
@@ -93,6 +98,16 @@ export function AboutView({
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 动画
+              </Button>
+              <Button
+                variant={showKeyboardHints ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowKeyboardHints(!showKeyboardHints)}
+                aria-pressed={showKeyboardHints}
+                title="切换键位提示"
+              >
+                <Keyboard className="h-3.5 w-3.5" />
+                键位
               </Button>
               <Button
                 variant="outline"

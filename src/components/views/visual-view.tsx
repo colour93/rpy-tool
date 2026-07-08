@@ -10,6 +10,7 @@ import {
   Toolbar,
 } from '@/components/shared'
 import { useResizableSidebar } from '@/hooks/useResizableSidebar'
+import { formatShortcut, SHORTCUTS } from '@/lib/shortcuts'
 import { lineKey, lineMatchesQuery } from '@/appHelpers'
 import { cn } from '@/lib/cn'
 import type {
@@ -206,7 +207,7 @@ export function VisualView({
             >
               <Save className="h-3.5 w-3.5" />
               保存
-              <KeyboardHint>Ctrl+S</KeyboardHint>
+              <KeyboardHint>{formatShortcut(SHORTCUTS.save)}</KeyboardHint>
             </Button>
           )}
         </Toolbar>
