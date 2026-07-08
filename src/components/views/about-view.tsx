@@ -70,7 +70,7 @@ export function AboutView({
           <div className="flex items-center justify-between gap-3 mb-2">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold">关于</h1>
-              <Badge variant="muted">v{APP_VERSION}</Badge>
+              <Badge variant="muted">{APP_VERSION}</Badge>
             </div>
             <div
               className="flex flex-wrap items-center justify-end gap-2"

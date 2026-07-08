@@ -74,7 +74,7 @@ export function Topbar({
           </span>
           <span className="text-sm">Rpy Tool</span>
           <span className="rounded border border-border bg-secondary/70 px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-muted-foreground">
-            v{APP_VERSION}
+            {APP_VERSION}
           </span>
         </button>
 
