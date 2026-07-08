@@ -16,6 +16,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "preview": "vite preview",
+    "sdk:smoke": "bun run scripts/sdk/memory-smoke.ts",
     "deploy:pages": "bun run build && bunx wrangler@latest pages deploy dist --project-name rpy-tool"
   },
   "dependencies": {

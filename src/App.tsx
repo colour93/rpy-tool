@@ -29,23 +29,21 @@ import type {
   WorkspaceSnapshot,
 } from '@/types'
 import {
-  buildShowCommand,
-  replaceLineSpeaker,
-  replaceDialogueSprite,
-  replaceEditableLine,
-} from '@/services/rpyParser'
-import {
   forgetWorkspace,
   forgetWorkspaceHistoryEntry,
+  getWorkspaceSdk,
   loadWorkspaceHistory,
   openWorkspace,
   readTextFile,
   rescanFiles,
   restoreWorkspace,
   restoreWorkspaceHandle,
+  statFile,
+  undoFileEdit as undoWorkspaceFileEdit,
   writeTextFile,
   type WorkspaceHistoryEntry,
 } from '@/services/workspace'
+import type { RenpyFileEdit } from '@/sdk/file-adapter'
 import {
   clearDraft,
   clampScriptFontSize,
@@ -186,13 +184,7 @@ function workspaceFingerprint(snapshot: WorkspaceSnapshot | undefined) {
   }
 }
 
-interface UndoableFileEdit {
-  file: WorkspaceSnapshot['files'][number]
-  filePath: string
-  beforeText: string
-  afterText: string
-  selectLineNumber?: number
-}
+type UndoableFileEdit = RenpyFileEdit
 
 function AppShell({
   onWorkspaceReadyChange,
@@ -716,40 +708,18 @@ function AppShell({
     setSelectedLineKey(line ? lineKey(line) : undefined)
   }
 
-  async function persistLines(
-    filePath: string,
-    mutate: (lines: string[]) => string[],
-  ): Promise<UndoableFileEdit> {
-    if (!snapshot) throw new Error('当前没有打开工作区')
-    const file = snapshot.files.find((entry) => entry.path === filePath)
-    if (!file) throw new Error(`文件 ${filePath} 不在当前工作区索引中`)
-    const text = await readTextFile(file)
-    const lines = text.split(/\r?\n/)
-    const next = mutate(lines)
-    const nextText = next.join('\n')
-    await writeTextFile(file, nextText)
-    return {
-      file,
-      filePath,
-      beforeText: text,
-      afterText: nextText,
-    }
-  }
-
   async function undoFileEdit(edit: UndoableFileEdit) {
     if (!snapshot) return
     setIsBusy(true)
     try {
-      const currentText = await readTextFile(edit.file)
-      if (currentText !== edit.afterText) {
+      const result = await undoWorkspaceFileEdit(snapshot, edit)
+      if (result.status === 'conflict' || !result.snapshot) {
         toast.warn('无法撤销', '文件已经发生新的变化，已保留当前内容')
         return
       }
-      await writeTextFile(edit.file, edit.beforeText)
-      const refreshed = await rescanFiles(snapshot, [edit.filePath])
-      applySnapshot(refreshed, true)
+      applySnapshot(result.snapshot, true)
       selectNearestLine(
-        refreshed,
+        result.snapshot,
         edit.filePath,
         edit.selectLineNumber ?? selectedLine?.lineNumber ?? 1,
       )
@@ -796,17 +766,11 @@ function AppShell({
         : (line.characterId ?? null)
     setIsBusy(true)
     try {
-      const edit = await persistLines(line.filePath, (lines) => {
-        const next = [...lines]
-        const nextRaw = replaceLineSpeaker(
-          replaceEditableLine(line.raw, nextText),
-          nextSpeakerId,
-        )
-        next[line.lineNumber - 1] = nextRaw
-        return next
-      })
-      edit.selectLineNumber = line.lineNumber
-      const refreshed = await rescanFiles(snapshot, [line.filePath])
+      const { edit, snapshot: refreshed } =
+        await getWorkspaceSdk().saveEditableLine(snapshot, line, {
+          text: nextText,
+          speakerId: nextSpeakerId,
+        })
       applySnapshot(refreshed, true)
       setDrafts((current) => clearDraft(current, targetDraftKey))
       clearReviewMarkForLine(line)
@@ -883,16 +847,6 @@ function AppShell({
     setSelectedLineKey(line ? lineKey(line) : undefined)
   }
 
-  function makeInsertedLine(anchor: RpyLine) {
-    const indent = anchor.indent ?? ''
-    if (anchor.kind === 'choice') return `${indent}"":`
-    if (anchor.characterId) {
-      const head = [anchor.characterId, anchor.target].filter(Boolean).join(' ')
-      return `${indent}${head} ""`
-    }
-    return `${indent}""`
-  }
-
   async function confirmLineNumberShift(actionLabel: string, filePath: string) {
     const count = draftCountForFile(filePath)
     if (count === 0) return true
@@ -921,20 +875,12 @@ function AppShell({
     if (!confirmed) return
     setIsBusy(true)
     try {
-      const inserted = makeInsertedLine(line)
-      const targetLineNumber =
-        position === 'before' ? line.lineNumber : line.lineNumber + 1
-      const edit = await persistLines(filePath, (lines) => {
-        const next = [...lines]
-        const insertIndex =
-          position === 'before'
-            ? Math.max(0, line.lineNumber - 1)
-            : Math.min(next.length, line.lineNumber)
-        next.splice(insertIndex, 0, inserted)
-        return next
-      })
-      edit.selectLineNumber = targetLineNumber
-      const refreshed = await rescanFiles(snapshot, [filePath])
+      const {
+        edit,
+        snapshot: refreshed,
+        inserted,
+      } = await getWorkspaceSdk().insertEditableLine(snapshot, line, position)
+      const targetLineNumber = edit.selectLineNumber ?? line.lineNumber
       applySnapshot(refreshed, true)
       clearDraftsForFile(filePath)
       clearReviewMarksForFile(filePath)
@@ -971,12 +917,10 @@ function AppShell({
     if (!confirmed) return
     setIsBusy(true)
     try {
-      await persistLines(filePath, (lines) => {
-        const next = [...lines]
-        next.splice(line.lineNumber - 1, 1)
-        return next
-      })
-      const refreshed = await rescanFiles(snapshot, [filePath])
+      const { snapshot: refreshed } = await getWorkspaceSdk().deleteLine(
+        snapshot,
+        line,
+      )
       applySnapshot(refreshed, true)
       clearDraftsForFile(filePath)
       clearReviewMarksForFile(filePath)
@@ -1002,34 +946,8 @@ function AppShell({
     if (!confirmed) return
     setIsBusy(true)
     try {
-      const byFile = new Map<string, DraftEntry[]>()
-      for (const draft of Object.values(drafts)) {
-        const [path] = draft.lineKey.split(':')
-        const list = byFile.get(path) ?? []
-        list.push(draft)
-        byFile.set(path, list)
-      }
-      const touchedFiles: string[] = []
-      for (const [path, list] of byFile) {
-        await persistLines(path, (lines) => {
-          const next = [...lines]
-          for (const draft of list) {
-            const [, lineStr] = draft.lineKey.split(':')
-            const lineNumber = Number(lineStr)
-            const original = next[lineNumber - 1]
-            if (typeof original === 'string') {
-              const textChanged = replaceEditableLine(original, draft.text)
-              next[lineNumber - 1] =
-                'speakerId' in draft
-                  ? replaceLineSpeaker(textChanged, draft.speakerId ?? null)
-                  : textChanged
-            }
-          }
-          return next
-        })
-        touchedFiles.push(path)
-      }
-      const refreshed = await rescanFiles(snapshot, touchedFiles)
+      const { snapshot: refreshed, touchedFiles } =
+        await getWorkspaceSdk().saveDrafts(snapshot, Object.values(drafts))
       applySnapshot(refreshed, true)
       setReviewMarks((current) => {
         const next = { ...current }
@@ -1064,30 +982,23 @@ function AppShell({
     if (!snapshot || !selectedLine || !state) return
     setIsBusy(true)
     try {
-      const command = buildShowCommand({
-        imageTag: state.imageTag,
+      const {
+        edit,
+        snapshot: refreshed,
+        command,
+      } = await getWorkspaceSdk().insertShowCommand(snapshot, selectedLine, {
+        state,
         position: spritePosition,
         transition: spriteTransition || undefined,
-        indent: selectedLine.indent ?? '    ',
         variant,
       })
-      const edit = await persistLines(selectedLine.filePath, (lines) => {
-        const next = [...lines]
-        const insertIndex =
-          selectedLine.kind === 'label'
-            ? selectedLine.lineNumber
-            : Math.max(0, selectedLine.lineNumber - 1)
-        next.splice(insertIndex, 0, command)
-        return next
-      })
-      edit.selectLineNumber =
-        selectedLine.kind === 'label'
-          ? selectedLine.lineNumber + 1
-          : selectedLine.lineNumber
-      const refreshed = await rescanFiles(snapshot, [selectedLine.filePath])
       applySnapshot(refreshed, true)
       clearReviewMarksForFile(selectedLine.filePath)
-      selectNearestLine(refreshed, selectedLine.filePath, edit.selectLineNumber)
+      selectNearestLine(
+        refreshed,
+        selectedLine.filePath,
+        edit.selectLineNumber ?? selectedLine.lineNumber,
+      )
       setStatus(`已插入：${command.trim()}`)
       toastUndoableSuccess(`${variant} 已插入`, command.trim(), edit)
     } catch (error) {
@@ -1103,17 +1014,14 @@ function AppShell({
     if (!snapshot || !selectedLine || selectedLine.kind !== 'dialogue') return
     setIsBusy(true)
     try {
-      const nextRaw = replaceEditableLine(
-        replaceDialogueSprite(selectedLine.raw, state),
-        currentDraftText,
-      )
-      const edit = await persistLines(selectedLine.filePath, (lines) => {
-        const next = [...lines]
-        next[selectedLine.lineNumber - 1] = nextRaw
-        return next
+      const {
+        edit,
+        snapshot: refreshed,
+        raw: nextRaw,
+      } = await getWorkspaceSdk().applyDialogueSprite(snapshot, selectedLine, {
+        state,
+        text: currentDraftText,
       })
-      edit.selectLineNumber = selectedLine.lineNumber
-      const refreshed = await rescanFiles(snapshot, [selectedLine.filePath])
       applySnapshot(refreshed, true)
       if (draftKey) setDrafts((current) => clearDraft(current, draftKey))
       clearReviewMarkForLine(selectedLine)
@@ -1158,15 +1066,17 @@ function AppShell({
       message: '读取中…',
     }))
     try {
-      const blob = await file.handle.getFile()
-      const content = await blob.text()
+      const [content, stat] = await Promise.all([
+        readTextFile(file),
+        statFile(file),
+      ])
       setSourceEditor({
         path: file.path,
         content,
         dirty: false,
         loading: false,
-        lastModified: blob.lastModified,
-        size: blob.size,
+        lastModified: stat?.lastModified,
+        size: stat?.size,
         message: `已载入 ${file.path}`,
       })
       setStatus(`已打开源文件 ${file.path}`)
@@ -1185,10 +1095,10 @@ function AppShell({
     if (!file) return
     setIsBusy(true)
     try {
-      const latest = await file.handle.getFile()
+      const latest = await statFile(file)
       const externallyChanged =
-        latest.lastModified !== sourceEditor.lastModified ||
-        latest.size !== sourceEditor.size
+        latest?.lastModified !== sourceEditor.lastModified ||
+        latest?.size !== sourceEditor.size
       if (externallyChanged) {
         const confirmed = await dialog.confirm({
           title: '文件已被外部修改',
@@ -1202,15 +1112,15 @@ function AppShell({
         }
       }
       await writeTextFile(file, sourceEditor.content)
-      const saved = await file.handle.getFile()
+      const saved = await statFile(file)
       const refreshed = await rescanFiles(snapshot, [file.path])
       applySnapshot(refreshed, true)
       clearReviewMarksForFile(file.path)
       setSourceEditor((current) => ({
         ...current,
         dirty: false,
-        lastModified: saved.lastModified,
-        size: saved.size,
+        lastModified: saved?.lastModified,
+        size: saved?.size,
         message: '保存完成',
       }))
       setStatus(`已保存 ${file.path}`)

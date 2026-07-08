@@ -30,6 +30,7 @@ import {
   lineMatchesQuery,
 } from '@/appHelpers'
 import { getImagePreviewUrl } from '@/services/thumbnails'
+import { readBlob } from '@/services/workspace'
 import { normalizePathKey } from '@/services/path-utils'
 import {
   formatShortcut,
@@ -1059,8 +1060,7 @@ export function AudioPreview({ file }: { file: FileEntry }) {
 
   useEffect(() => {
     let active = true
-    file.handle
-      .getFile()
+    readBlob(file)
       .then((blob) => {
         const next = URL.createObjectURL(blob)
         if (active) setUrl(next)

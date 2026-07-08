@@ -25,7 +25,6 @@ export interface FileEntry {
   extension: string
   size: number
   lastModified?: number
-  handle: FileSystemFileHandle
 }
 
 export type RpyLineKind =
